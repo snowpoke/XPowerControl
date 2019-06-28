@@ -1,0 +1,1 @@
+{"icon_file":"C:/Users/fkpma/Documents/Twitch Overlay/icon.txt","iksm-session":"b8093e6c5f57d51c454d17b02b4be8626d4f89ee","lose_file":"C:/Users/fkpma/Documents/Twitch Overlay/lose.txt","points_file":"C:/Users/fkpma/Documents/Twitch Overlay/points.txt","power_file":"C:/Users/fkpma/Documents/Twitch Overlay/power.txt","win_file":"C:/Users/fkpma/Documents/Twitch Overlay/win.txt"}
