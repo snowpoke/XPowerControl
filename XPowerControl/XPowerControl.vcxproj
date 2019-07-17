@@ -246,6 +246,7 @@
     <None Include="res\XPowerControl.rc2" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="res\icon1.ico" />
     <Image Include="res\XPowerControl.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

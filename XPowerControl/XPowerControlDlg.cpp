@@ -146,23 +146,26 @@ BOOL CXPowerControlDlg::OnInitDialog()
 	string SESSID = read_from_settings("iksm-session");
 	if (SESSID == "") {
 		AfxMessageBox(_T("No value for iksm_session was found. "
-			"Please check the description in README.txt to learn how to use this program. Press ENTER to exit."));
+			"Please check the description in README.txt to learn how to use this program. Press OK to exit."));
 		AfxGetMainWnd()->SendMessage(WM_CLOSE);
-	}
-
-	// test run a call to chech whether the sessid is valid
-	string schedule_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules", SESSID);
-	// if the string contains "AUTHENTICATION_ERROR", we quit
-	if (schedule_json_string.find("AUTHENTICATION_ERROR") != std::string::npos) {
-		AfxMessageBox(_T("Your IKSM token has run out. After pressing OK, you will be redirected to the token refresher tool. Check the README.txt file for details."));
-		RetrieveTokenDlg dlg;
-		dlg.DoModal();
 		return FALSE;
 	}
-	
-	thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
-	thread_monitor_main = AfxBeginThread(monitor_main_alt, this);
-	return TRUE;  // return TRUE  unless you set the focus to a control
+	else {
+
+		// test run a call to chech whether the sessid is valid
+		string schedule_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules", SESSID);
+		// if the string contains "AUTHENTICATION_ERROR", we quit
+		if (schedule_json_string.find("AUTHENTICATION_ERROR") != std::string::npos) {
+			AfxMessageBox(_T("Your IKSM token has run out. After pressing OK, you will be redirected to the token refresher tool. Check the README.txt file for details."));
+			RetrieveTokenDlg dlg;
+			dlg.DoModal();
+			return FALSE;
+		}
+
+		thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
+		thread_monitor_main = AfxBeginThread(monitor_main_alt, this);
+		return TRUE;  // return TRUE  unless you set the focus to a control
+	}
 }
 
 // If you add a minimize button to your dialog, you will need the code below

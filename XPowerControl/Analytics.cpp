@@ -25,7 +25,7 @@ Analytics::Analytics()
 		boost::archive::binary_oarchive archive(new_file);
 
 		archive << battle_entries; // battle_entries are empty at this point
-
+		
 	}
 	read_from_binary();
 }
