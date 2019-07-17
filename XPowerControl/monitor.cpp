@@ -314,9 +314,9 @@ UINT monitor_main_alt(LPVOID pParam) {
 				powers[curr_mode] = new_power;
 
 				// initialize analytics thread
-				optional<float> win_change = (power_change > 0) ? optional<float>(power_change) : optional<float>();
-				args_analytics args = { &(window->analytics), SESSID, powers_after_loss[curr_mode], ranges[curr_mode], win_change };
-				AfxBeginThread(add_recent_match_analytics, &args);
+				//optional<float> win_change = (power_change > 0) ? optional<float>(power_change) : optional<float>();
+				//args_analytics args = { &(window->analytics), SESSID, powers_after_loss[curr_mode], ranges[curr_mode], win_change };
+				//AfxBeginThread(add_recent_match_analytics, &args);
 
 
 				if (power_change > 0) { // if we won the match, we can use this information to adjust the range
