@@ -56,7 +56,8 @@ END_MESSAGE_MAP()
 
 void RetrieveTokenDlg::OnBnClickedButtonMitm()
 {
-	mitmHandle = mitm_start();
+
+	mitm_handle = mitm_start_alt();
 	mitm_started = true;
 	tokenEdit.SetWindowTextW(L"> Follow Step 2 <");
 	start_mitm_button.EnableWindow(FALSE);
@@ -74,8 +75,8 @@ void RetrieveTokenDlg::OnClose()
 {
 	// TODO: Add your message handler code here and/or call default
 	if (mitm_started) // if mitm is running, exit it now
-		TerminateProcess(mitmHandle, 0);
-
+		kill_mitm(this);
+		
 	CDialogEx::OnClose();
 }
 
@@ -92,7 +93,7 @@ void RetrieveTokenDlg::OnBnClickedButton1()
 	ofile << j;
 	ofile.close();
 
-	AfxBeginThread(monitor_main, AfxGetApp()->GetMainWnd());
+	AfxBeginThread(monitor_main_alt, AfxGetApp()->GetMainWnd());
 	AfxBeginThread(monitor_rotation, AfxGetApp()->GetMainWnd());
 	SendMessage(WM_CLOSE);
 }

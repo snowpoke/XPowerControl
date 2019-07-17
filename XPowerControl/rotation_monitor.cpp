@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "monitor.h"
 #include "rotation_monitor.h"
+#include "http_requests.h"
+#include "settings.h"
 #include "XPowerControlDlg.h"
 #include "nlohmann/json.hpp"
 #include "boost/date_time/posix_time/posix_time.hpp"
@@ -11,16 +13,16 @@
 using namespace std;
 using namespace boost;
 
-void write_time(string time) {
+void write_time(const string& time, const string& filename) {
 	ofstream file;
-	file.open("C:/Users/fkpma/Documents/Twitch Overlay/countdown.txt");
+	file.open(filename);
 	file << time;
 	file.close();
 }
 
-void write_timestamp_end(int timestamp) {
+void write_timestamp_end(int timestamp, const string& filename) {
 	ofstream file;
-	file.open("C:/Users/fkpma/Documents/Twitch Overlay/timestamp_end.txt");
+	file.open(filename);
 	file << timestamp;
 	file.close();
 }
@@ -29,9 +31,11 @@ UINT monitor_rotation(LPVOID pParam) {
 
 	CXPowerControlDlg* window = (CXPowerControlDlg*)pParam;
 	string SESSID = read_from_settings("iksm-session");
+	string countdown_filename = read_from_settings("countdown_file");
+	string timestamp_filename = read_from_settings("timestamp_file");
 
 	// check current rotation
-	string schedule_string = loadPage("https://app.splatoon2.nintendo.net/api/schedules",SESSID);
+	string schedule_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules",SESSID);
 	int rot_end;
 	nlohmann::json j;
 	try {
@@ -45,15 +49,15 @@ UINT monitor_rotation(LPVOID pParam) {
 	time_t timestamp_now = time(nullptr);
 	int rot_seconds_left = static_cast<int>(rot_end - timestamp_now);
 
-	write_timestamp_end(rot_end);
+	write_timestamp_end(rot_end, timestamp_filename);
 
 	while (!window->kill_rotation_monitor) {
 		if (rot_seconds_left <= 0) {
 			if (window->match_running) { // the rotation is over, but we are still in a match => display "FINAL"
-				write_time("FINAL");
+				write_time("FINAL", countdown_filename);
 			}
 			else { // if no match is running, we update to the next rotation
-				schedule_string = loadPage("https://app.splatoon2.nintendo.net/api/schedules", SESSID);
+				schedule_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules", SESSID);
 				try {
 					j = nlohmann::json::parse(schedule_string);
 					rot_end = j["gachi"].at(0)["end_time"].get<int>();
@@ -65,7 +69,7 @@ UINT monitor_rotation(LPVOID pParam) {
 				timestamp_now = time(nullptr);
 				rot_seconds_left = static_cast<int>(rot_end - timestamp_now);
 				window->update_rotation = true;
-				write_timestamp_end(rot_end);
+				write_timestamp_end(rot_end, timestamp_filename);
 			}
 		}
 		else {
@@ -77,7 +81,7 @@ UINT monitor_rotation(LPVOID pParam) {
 				countdown = countdown.substr(3, 7);
 			else
 				countdown = countdown.substr(1, 7);
-			write_time(countdown);
+			write_time(countdown, countdown_filename);
 		}
 		Sleep(1000);
 	}

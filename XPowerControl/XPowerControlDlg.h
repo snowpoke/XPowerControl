@@ -4,6 +4,7 @@
 
 #pragma once
 #include <string>
+#include "Analytics.h"
 
 // CXPowerControlDlg dialog
 class CXPowerControlDlg : public CDialogEx
@@ -45,5 +46,6 @@ public:
 //	afx_msg void OnAcnStartAnimate1();
 	CStatic m_loading_info;
 	CStatic m_battle_start_text;
+	Analytics analytics;
 	afx_msg void OnClose();
 };

@@ -19,11 +19,53 @@ HANDLE mitm_start() { // removes previous token and starts mitmdump.exe
 	exec_info.lpFile = L"mitmdump.exe";
 	exec_info.lpParameters = L"-s mitm_script.py";
 	exec_info.lpDirectory = NULL;
-	exec_info.nShow = SW_HIDE;
+	exec_info.nShow = SW_SHOW;
 	exec_info.hInstApp = NULL;
 	ShellExecuteEx(&exec_info);
 
 	return exec_info.hProcess;
+}
+
+HANDLE mitm_start_alt() {
+	DeleteFile(L"token.txt");
+
+	// we create an empty job object that will contain the process
+	HANDLE job_handle = CreateJobObject(NULL, NULL);
+
+	// we set up the job object so that closing the job causes all child processes to be terminated
+	JOBOBJECT_BASIC_LIMIT_INFORMATION kill_flag_info;
+	kill_flag_info.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+	JOBOBJECT_EXTENDED_LIMIT_INFORMATION job_info;
+	job_info.BasicLimitInformation = kill_flag_info;
+
+	SetInformationJobObject(job_handle, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info));
+
+	// we start mitmdump
+	STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+
+	ZeroMemory(&si, sizeof(si));
+	si.dwFlags = STARTF_USESHOWWINDOW;
+	si.wShowWindow = SW_HIDE;
+	si.cb = sizeof(si);
+	ZeroMemory(&pi, sizeof(pi));
+
+	CreateProcess(L"mitmdump.exe",
+		L"mitmdump.exe -s mitm_script.py",
+		NULL,
+		NULL,
+		FALSE,
+		0,
+		NULL,
+		NULL,
+		&si,
+		&pi);
+
+	// we associate the mitmdump with the job we created
+	AssignProcessToJobObject(job_handle, pi.hProcess);
+
+	return job_handle;
 }
 
 
@@ -89,6 +131,11 @@ wstring access_token_to_iksm(string access_token_t) {
 
 		curl_easy_cleanup(curl1);
 		curl_slist_free_all(chunk);
+		
+		log_manually("Sending request to https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken.\n \
+		Using access token " + access_token_t + "\n \
+		Using post data " + data + "\n \
+		Obtained response " + buffer + "\n\n\n");
 
 		string gamewebtoken = "";
 		try {
@@ -126,6 +173,9 @@ wstring access_token_to_iksm(string access_token_t) {
 
 			/* free the custom headers */
 			curl_slist_free_all(chunk);
+
+			log_manually("Sending request to https://app.splatoon2.nintendo.net/?lang=en-GB&na_country=DE&na_lang=en-US \n \
+							Using x-gamewebtoken " + gamewebtoken + "\n\n\n");
 			try {
 				// we now read the information from the cookie file
 				wifstream file;
@@ -159,6 +209,11 @@ wstring access_token_to_iksm(string access_token_t) {
 		return ret;
 }
 
+void kill_mitm(RetrieveTokenDlg* dlg_t) {
+	CloseHandle(dlg_t->mitm_handle); // we set up the job so that this kills all child processes
+ 	dlg_t->mitm_started = false;
+}
+
 UINT token_listener(LPVOID pParam) { // checks if token file exists
 
 	RetrieveTokenDlg* tokenDlg = (RetrieveTokenDlg*)pParam;
@@ -169,15 +224,22 @@ UINT token_listener(LPVOID pParam) { // checks if token file exists
 			file >> authorization_token;
 			file.close();
 			DeleteFile(L"authorization.txt");
+			tokenDlg->tokenEdit.SetWindowTextW(L"Found authorization key! Retrieving token...");
 			tokenDlg->found_token = access_token_to_iksm(authorization_token);
+			kill_mitm(tokenDlg);
 			tokenDlg->tokenEdit.SetWindowTextW(tokenDlg->found_token.c_str());
 			tokenDlg->tokenEdit.EnableWindow(TRUE);
 			tokenDlg->ok_btn.EnableWindow(TRUE);
-			TerminateProcess(tokenDlg->mitmHandle, 0);
-			tokenDlg->mitm_started = false;
+			
 			break;
 		}
 	}
 
 	return 0;
+}
+
+void log_manually(string message) {
+	ofstream file;
+	file.open("log.txt", ios_base::app);
+	file << message;
 }

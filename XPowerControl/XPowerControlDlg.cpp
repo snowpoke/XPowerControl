@@ -9,6 +9,8 @@
 #include "afxdialogex.h"
 #include "monitor.h"
 #include "rotation_monitor.h"
+#include "http_requests.h"
+#include "settings.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -149,7 +151,7 @@ BOOL CXPowerControlDlg::OnInitDialog()
 	}
 
 	// test run a call to chech whether the sessid is valid
-	string schedule_json_string = loadPage("https://app.splatoon2.nintendo.net/api/schedules", SESSID);
+	string schedule_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules", SESSID);
 	// if the string contains "AUTHENTICATION_ERROR", we quit
 	if (schedule_json_string.find("AUTHENTICATION_ERROR") != std::string::npos) {
 		AfxMessageBox(_T("Your IKSM token has run out. After pressing OK, you will be redirected to the token refresher tool. Check the README.txt file for details."));
@@ -159,7 +161,7 @@ BOOL CXPowerControlDlg::OnInitDialog()
 	}
 	
 	thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
-	thread_monitor_main = AfxBeginThread(monitor_main, this);
+	thread_monitor_main = AfxBeginThread(monitor_main_alt, this);
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
 

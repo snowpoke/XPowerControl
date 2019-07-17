@@ -24,7 +24,7 @@ protected:
 public:
 	afx_msg void OnBnClickedButtonMitm();
 	CEdit tokenEdit;
-	HANDLE mitmHandle;
+	HANDLE mitm_handle;
 	bool mitm_started = false;
 	CButton start_mitm_button;
 	std::wstring found_token;

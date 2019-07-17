@@ -9,6 +9,10 @@
 #include "RetrieveTokenDlg.h"
 #include "stdafx.h"
 #include "Analytics.h"
+#include "wstring_transform.h"
+#include "settings.h"
+#include "http_requests.h"
+#include <assert.h>
 #include <iostream>
 #include <fstream>
 #include <stdio.h>
@@ -17,81 +21,10 @@
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <sstream>
 #include <locale>
-#include <Windows.h>
 
 using namespace std;
 using json = nlohmann::json;
 
-std::wstring s2ws(const std::string& s)
-{
-	int len;
-	int slength = (int)s.length() + 1;
-	len = MultiByteToWideChar(CP_ACP, 0, s.c_str(), slength, 0, 0);
-	wchar_t* buf = new wchar_t[len];
-	MultiByteToWideChar(CP_ACP, 0, s.c_str(), slength, buf, len);
-	std::wstring r(buf);
-	delete[] buf;
-	return r;
-}
-
-
-//  libcurl write callback function
-static int writer(char *data, size_t size, size_t nmemb,
-	std::string *writerData)
-{
-	if (writerData == NULL)
-		return 0;
-
-	writerData->append(data, size*nmemb);
-
-	return static_cast<int>(size * nmemb);
-}
-
-string read_from_settings(string key_t) {
-	try {
-		string ret;
-		ifstream file("settings.txt");
-		json j;
-		file >> j;
-		j.at(key_t).get_to(ret);
-		return ret;
-	}
-	catch(...){
-		cout << "Failed to open settings file.";
-		MessageBox(NULL, (LPCWSTR) L"Failed to open settings file.", (LPCWSTR) L"File error", MB_OK);
-
-		return "";
-	}
-}
-
-string loadPage(string link_t, string SESSID_t) {
-	CURL *curl;
-	CURLcode res;
-	string ret = "";
-	curl = curl_easy_init();
-	if (curl) {
-		curl_easy_setopt(curl, CURLOPT_URL, link_t.c_str());
-		/* example.com is redirected, so we tell libcurl to follow redirection */
-		curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ret);
-		curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "");
-		string cookie_val = "iksm_session=" + SESSID_t + ";";
-		curl_easy_setopt(curl, CURLOPT_COOKIE, cookie_val.c_str());
-		/* Perform the request, res will get the return code */
-		res = curl_easy_perform(curl);
-		/* Check for errors */
-		if (res != CURLE_OK) {
-			AfxMessageBox((L"Failed to load information from URL " + s2ws(link_t)).c_str());
-			AfxThrowUserException();
-		}
-			
-
-		/* always cleanup */
-		curl_easy_cleanup(curl);
-	}
-	return ret;
-}
 
 void load_powers(float& zones_t, float& tower_t, float& rainmaker_t, float& clams_t, string SESSID_t) {
 
@@ -111,7 +44,7 @@ void load_powers(float& zones_t, float& tower_t, float& rainmaker_t, float& clam
 
 	string rotation_string = start_year + start_month + "01T00_" + end_year + end_month + "01T00";
 
-	string xpower_json_string = loadPage("https://app.splatoon2.nintendo.net/api/x_power_ranking/" + rotation_string + "/summary", SESSID_t);
+	string xpower_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/x_power_ranking/" + rotation_string + "/summary", SESSID_t);
 	try {
 		json j = json::parse(xpower_json_string);
 
@@ -137,8 +70,12 @@ void load_powers(float& zones_t, float& tower_t, float& rainmaker_t, float& clam
 	}
 }
 
+void load_powers(ModeInfo<float>& powers_t, string SESSID_t) {
+	load_powers(powers_t[Mode::ZONES], powers_t[Mode::TOWER], powers_t[Mode::RAINMAKER], powers_t[Mode::CLAMS], SESSID_t);
+}
+
 void load_prev_match_info(int& start_time_t, float& power_after_t, string SESSID_t) {
-	string info_json_string = loadPage("https://app.splatoon2.nintendo.net/api/results", SESSID_t);
+	string info_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/results", SESSID_t);
 	try {
 		json j = json::parse(info_json_string);
 		string x_power_string;
@@ -157,8 +94,14 @@ void load_prev_match_info(int& start_time_t, float& power_after_t, string SESSID
 
 }
 
-mode get_mode(string SESSID_t) {
-	string schedule_json_string = loadPage("https://app.splatoon2.nintendo.net/api/schedules", SESSID_t);
+
+void load_prev_match_info(int& start_time_t, string SESSID_t) {
+	float temp;
+	load_prev_match_info(start_time_t, temp, SESSID_t);
+}
+
+Mode get_mode(string SESSID_t) {
+	string schedule_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules", SESSID_t);
 	try {
 		json j = json::parse(schedule_json_string);
 		string rule;
@@ -193,6 +136,69 @@ mode get_mode(string SESSID_t) {
 	}
 }
 
+void load_ranges(float& zones_range_t, float& tower_range_t, float& rainmaker_range_t, float& clams_range_t) {
+	ifstream file;
+	file.open("ranges.txt", ifstream::in);
+	file >> zones_range_t;
+	file >> tower_range_t;
+	file >> rainmaker_range_t;
+	file >> clams_range_t;
+	file.close();
+}
+
+void load_ranges(ModeInfo<float>& ranges_t) {
+	load_ranges(ranges_t[Mode::ZONES], ranges_t[Mode::TOWER], ranges_t[Mode::RAINMAKER], ranges_t[Mode::CLAMS]);
+}
+
+void save_ranges(const float& zones_range_t, const float& tower_range_t, const float& rainmaker_range_t, const float& clams_range_t) {
+	ofstream file;
+	file.open("ranges.txt");
+	file << zones_range_t << "\n";
+	file << tower_range_t << "\n";
+	file << rainmaker_range_t << "\n";
+	file << clams_range_t << "\n";
+	file.close();
+}
+
+void save_ranges(const ModeInfo<float>& ranges_t) {
+	save_ranges(ranges_t[Mode::ZONES], ranges_t[Mode::TOWER], ranges_t[Mode::RAINMAKER], ranges_t[Mode::CLAMS]);
+}
+
+
+void save_info(float power_t, optional<float> win_dist_t, optional<float> lose_dist_t, CXPowerControlDlg* window_t) {
+	boost::format pwr_formatter("%.1f");
+	pwr_formatter% power_t;
+	string pwr_string = pwr_formatter.str();
+
+	assert(win_dist_t.has_value() == lose_dist_t.has_value()); // the distances are either both given or not
+
+	if (win_dist_t) {
+		boost::format dist_formatter("%.0f");
+		string win_dist_string, lose_dist_string;
+
+
+		// if the win_dist is outside of <0 or >100, we display '??' instead
+		if ((*win_dist_t < 0) || (*win_dist_t > 100)) {
+			win_dist_string = "+??";
+		}
+		else if (*win_dist_t + *lose_dist_t > 37) { // if the range is above 35, we also display '??'
+			win_dist_string = "+??";
+		}
+		else {
+			dist_formatter% *win_dist_t;
+			win_dist_string = "+" + dist_formatter.str();
+		}
+		dist_formatter% *lose_dist_t;
+		lose_dist_string = "-" + dist_formatter.str();
+
+		save_info(pwr_string, win_dist_string, lose_dist_string, window_t);
+	}
+	else {
+		save_info(pwr_string, "", "", window_t);
+	}
+}
+
+
 void save_info(string power_t, string win_t, string lose_t, CXPowerControlDlg* window_t) {
 	ofstream file;
 	file.open(read_from_settings("power_file"));
@@ -217,74 +223,126 @@ void save_info(string power_t, string win_t, string lose_t, CXPowerControlDlg* w
 	window_t->GetDlgItem(IDC_LOSEVALUE)->SetWindowTextW(s2ws(lose_t).c_str());
 	window_t->GetDlgItem(IDC_POWERVALUE)->SetWindowTextW(s2ws(power_t).c_str());
 
-	if(window_t->match_running)
+	if (window_t->match_running)
 		window_t->GetDlgItem(IDC_BATTLE_START_TEXT)->ShowWindow(SW_HIDE);
 	else
 		window_t->GetDlgItem(IDC_BATTLE_START_TEXT)->ShowWindow(SW_SHOW);
 
 	window_t->Invalidate();
+	window_t->UpdateWindow();
 }
-
-void load_ranges(float& zones_range_t, float& tower_range_t, float& rainmaker_range_t, float& clams_range_t) {
-	ifstream file;
-	file.open("ranges.txt", ifstream::in);
-	file >> zones_range_t;
-	file >> tower_range_t;
-	file >> rainmaker_range_t;
-	file >> clams_range_t;
-	file.close();
-}
-
-void save_ranges(const float& zones_range_t, const float& tower_range_t, const float& rainmaker_range_t, const float& clams_range_t) {
-	ofstream file;
-	file.open("ranges.txt");
-	file << zones_range_t << "\n";
-	file << tower_range_t << "\n";
-	file << rainmaker_range_t << "\n";
-	file << clams_range_t << "\n";
-	file.close();
-}
-
-void save_info(float power_t, CXPowerControlDlg* window_t) {
-	boost::format pwr_formatter("%.1f");
-	pwr_formatter % power_t;
-	string pwr_string = pwr_formatter.str();
-
-	save_info(pwr_string, "", "", window_t);
-}
-
-void save_info(float power_t, float win_dist_t, float lose_dist_t, CXPowerControlDlg* window_t) {
-	boost::format pwr_formatter("%.1f");
-	boost::format dist_formatter("%.0f");
-	string pwr_string, win_dist_string, lose_dist_string;
-	pwr_formatter % power_t;
-	pwr_string = pwr_formatter.str();
-	// if the win_dist is outside of <0 or >100, we display '??' instead
-	if ((win_dist_t < 0) || (win_dist_t > 1000)) {
-		win_dist_string = "+??";
-	}
-	else if(win_dist_t + lose_dist_t > 35){ // if the range is above 35, we also display '??'
-		win_dist_string = "+??";
-	}
-	else {
-		dist_formatter % win_dist_t;
-		win_dist_string = "+" + dist_formatter.str();
-	}
-	dist_formatter % lose_dist_t;
-	lose_dist_string = "-" + dist_formatter.str();
-
-	save_info(pwr_string, win_dist_string, lose_dist_string, window_t);
-}
-
 
 float round2(float val_t) {
 	return static_cast<float>(round(val_t * 10.0) / 10.0);
 }
 
+float power_truncate(float change_t, float power_t) {
+	float power_trunc = trunc(power_t);
+	float change_trunc = trunc(power_t + change_t) - power_trunc;
+
+	return abs(change_trunc);
+}
+
+UINT monitor_main_alt(LPVOID pParam) {
+
+	CXPowerControlDlg* window = (CXPowerControlDlg*)pParam;
+
+	window->m_loading_info.ShowWindow(SW_HIDE); // remove the loading indicator
+	window->GetDlgItem(IDC_WINTEXT)->ShowWindow(SW_SHOW);
+	window->GetDlgItem(IDC_LOSETEXT)->ShowWindow(SW_SHOW);
+	window->GetDlgItem(IDC_BATTLE_START_TEXT)->ShowWindow(SW_SHOW);
+	
+	string SESSID = read_from_settings("iksm-session");
+
+	ModeInfo<float> powers, ranges;
+	load_powers(powers, SESSID);
+	load_ranges(ranges);
+	Mode curr_mode = get_mode(SESSID);
+
+	save_info(powers[curr_mode], {}, {}, window);
+
+	// we set up the start time of the previous match so we can recognize when a match has ended
+	int prev_start_time;
+	load_prev_match_info(prev_start_time, SESSID);
+
+	// we initialize powers_after for use later, it contains the powers we would have after a loss
+	ModeInfo<float> powers_after_loss = {0,0,0,0};
+
+	while (!window->kill_monitor_main) {
+		if (!window->match_running) {
+
+			// if a new rotation was detected, we reload the mode and save the power
+			if (window->update_rotation) {
+				curr_mode = get_mode(SESSID);
+				save_info(powers[curr_mode], {}, {}, window);
+				window->update_rotation = false;
+			}
+
+			load_powers(powers_after_loss, SESSID);
+
+			// a change in the saved power has been detected
+			if (powers[curr_mode] != powers_after_loss[curr_mode]) {
+				window->match_running = true;
+
+				// number of points that would be lost after a defeat (contains negative sign)
+				float loss_distance = round2(powers[curr_mode] - powers_after_loss[curr_mode]);
+				// estimate of number of points that would be won after a victory
+				float win_distance = ranges[curr_mode] - loss_distance;
+
+				// truncate numbers into the format used in Splatoon
+				float loss_trunc = power_truncate(-1*loss_distance, powers[curr_mode]);
+				float win_trunc = power_truncate(win_distance, powers[curr_mode]);
+				cout << "Current power:" << powers[curr_mode] << "/n";
+				cout << "Loss distance (float): " << loss_distance << "/n";
+				cout << "Loss distance (trunc): " << loss_trunc << "/n";
+				cout << "Win distance (float): " << win_distance << "/n";
+				cout << "Win distance (trunc): " << win_trunc << "/n/n/n";
+				save_info(powers[curr_mode], win_trunc, loss_trunc, window);
+			}
+		}
+		else { // no match is currently running
+
+			// load starting time and resulting power of the last match saved in splatapp
+			int new_start_time;
+			float new_power;
+			load_prev_match_info(new_start_time, new_power, SESSID);
+
+			if (prev_start_time != new_start_time) { // if a new starting time was found, this means the match has ended
+				window->match_running = false;
+
+				float power_change = new_power - powers[curr_mode];
+				powers[curr_mode] = new_power;
+
+				// initialize analytics thread
+				optional<float> win_change = (power_change > 0) ? optional<float>(power_change) : optional<float>();
+				args_analytics args = { &(window->analytics), SESSID, powers_after_loss[curr_mode], ranges[curr_mode], win_change };
+				AfxBeginThread(add_recent_match_analytics, &args);
+
+
+				if (power_change > 0) { // if we won the match, we can use this information to adjust the range
+					ranges[curr_mode] = round2(new_power - powers_after_loss[curr_mode]);
+					save_ranges(ranges);
+				}
+
+				prev_start_time = new_start_time;
+				save_info(powers[curr_mode], {}, {}, window);
+			}
+		}
+
+		// this shouldn't be necessary, but somehow is
+		window->Invalidate();
+		window->UpdateWindow();
+
+		Sleep(1000);
+	}
+
+	return 0;
+}
+/*
 UINT monitor_main(LPVOID pParam)
 {
 	cout << "-- PRE-RELEASE VERSION FOR SUBSCRIBERS ONLY --\n"
-		<< "VERSION " << VERSION << "\n"
+		<< "VERSION X.X \n"
 		<< "This program is a very early version and is only available to subscribers of my twitch channel:\n"
 		<< "https://twitch.tv/snowpoke\n"
 		<< "If you obtained this program thorugh other means, please consider leaving a gift sub to my wonderful community.\n\n";
@@ -305,10 +363,11 @@ UINT monitor_main(LPVOID pParam)
 
 
 	load_powers(zones_pwr, tower_pwr, rainmaker_pwr, clams_pwr, SESSID);
+
 	load_prev_match_info(start_time, power_after, SESSID);
 
 
-	mode curr_mode = get_mode(SESSID);
+	Mode curr_mode = get_mode(SESSID);
 	float zones_range, tower_range, rainmaker_range, clams_range;
 	float* curr_range;
 
@@ -367,7 +426,6 @@ UINT monitor_main(LPVOID pParam)
 			// if there is no match running, check for changes in the x power
 			// once a power changes, we know that a match is running
 			load_powers(zones_pwr_after, tower_pwr_after, rainmaker_pwr_after, clams_pwr_after, SESSID);
-			//cout << "Loaded " << zones_pwr_after << "," << tower_pwr_after << "," << rainmaker_pwr_after << "," << clams_pwr_after << "\n";
 			float pwr_sum_old = round2(zones_pwr + tower_pwr + rainmaker_pwr + clams_pwr);
 			float pwr_sum = round2(zones_pwr_after + tower_pwr_after + rainmaker_pwr_after + clams_pwr_after);
 			if (pwr_sum_old != pwr_sum) {
@@ -410,13 +468,19 @@ UINT monitor_main(LPVOID pParam)
 		else {
 			// if there is a match running, we test for a new entry in the match list - this indicates that the match is over
 			int start_time_old = start_time;
+
 			load_prev_match_info(start_time, power_after, SESSID);
 			if (start_time != start_time_old) { // a new match has been stored
 				cout << "Match has ended." << "\n";
 				window->match_running = false;
 				// if we won the match, we can use this to adjust the range
-				if (power_after > power_before) {
-					float range_old = *curr_range;
+				float range_old = *curr_range;
+				float power_change = power_after - power_before;
+
+				args_analytics args = { window->analytics, SESSID, win_distance, range_old, power_change };
+				AfxBeginThread(add_recent_match_analytics, &args);
+
+				if (power_change > 0) {
 					*curr_range = round2(power_after - power_after_loss);
 					cout << "New range: " << *curr_range << "\n";
 					if (range_old != *curr_range) {
@@ -425,6 +489,7 @@ UINT monitor_main(LPVOID pParam)
 
 					}
 				}
+
 				cout << "\n----------\n";
 				load_powers(zones_pwr, tower_pwr, rainmaker_pwr, clams_pwr, SESSID); // update all powers
 				loss_distance = 0;
@@ -439,3 +504,4 @@ UINT monitor_main(LPVOID pParam)
 	}
 	return 0;
 }
+*/
