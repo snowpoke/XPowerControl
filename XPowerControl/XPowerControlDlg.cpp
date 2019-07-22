@@ -162,6 +162,7 @@ BOOL CXPowerControlDlg::OnInitDialog()
 	
 	thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
 	thread_monitor_main = AfxBeginThread(monitor_main_alt, this);
+
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
 

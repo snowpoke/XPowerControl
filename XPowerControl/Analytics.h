@@ -16,7 +16,8 @@
 #include "boost/serialization/map.hpp"
 
 
-struct PlayerData {
+class PlayerData {
+public:
 	int kill_count; // number of kills, without assists
 	int assist_count; // number of assists
 	int death_count; // counts how often the player died
@@ -44,6 +45,9 @@ struct PlayerData {
 		ar & abilities;
 	}
 
+	// create string to upload
+	nlohmann::json to_json();
+
 	// to avoid serialization errors, we require elements to be initialized with all members
 	PlayerData(int kill_count, int assist_count, int death_count, int paint_count,
 		std::string& id, std::string& name, int level, int level_prestige,
@@ -53,9 +57,13 @@ struct PlayerData {
 			level_prestige(level_prestige), weapon(weapon), abilities(abilities) {}
 
 	PlayerData() {};
+
+private:
+	nlohmann::json abilities_to_json();
 };
 
-struct BattleData {
+class BattleData {
+public:
 	std::optional<float> player_xpower; // false if placement match, otherwise player's x power at the start of the match
 	int recent_disconnects; // number of recent disconnects
 	bool is_placements; // is this a placement match?
@@ -103,6 +111,9 @@ struct BattleData {
 		ar & dcs_badguys;
 	}
 
+	// create string to upload
+	nlohmann::json to_json();
+
 	// to avoid serialization errors, we require elements to be initialized with all members
 	BattleData(std::optional<float> player_xpower, int recent_disconnects, bool is_placements,
 		std::string game_id, float avg_power, int match_timestamp, int match_length,
@@ -120,6 +131,9 @@ struct BattleData {
 			dcs_goodguys(dcs_goodguys), dcs_badguys(dcs_badguys) {}
 
 	BattleData() {};
+
+private:
+	template<class T> nlohmann::json optional_to_json(std::optional<T> opt) ;
 };
 
 

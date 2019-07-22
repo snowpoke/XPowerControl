@@ -172,6 +172,102 @@ int Analytics::get_recent_dc_count(const string& SESSID_t) {
 	return j["records"]["recent_disconnect_count"].get<int>();
 }
 
+
+void Analytics::write_to_binary() {
+	ofstream file("battle_data.dat");
+	boost::archive::binary_oarchive archive(file);
+
+	archive << battle_entries;
+}
+
+void Analytics::read_from_binary() {
+	ifstream file("battle_data.dat");
+	boost::archive::binary_iarchive archive(file);
+
+	archive >> battle_entries;
+}
+
+
+nlohmann::json PlayerData::abilities_to_json() {
+	nlohmann::json ret;
+
+	for (auto const& [key, val] : abilities) {
+		ret.push_back(nlohmann::json(
+			{ {"code", key},
+			{"ap", val} }
+		));
+	}
+
+	return ret;
+}
+
+
+nlohmann::json PlayerData::to_json() {
+	nlohmann::json data = {
+		{"kill_count", kill_count},
+		{"assist_count", assist_count},
+		{"death_count", death_count},
+		{"paint_count", paint_count},
+		{"id", id},
+		{"name", "ANONYMIZED"},
+		{"level", level},
+		{"level_prestige", level_prestige},
+		{"weapon", weapon},
+		{"abilities", abilities_to_json()}
+	};
+
+	return data;
+}
+
+template<class T>
+nlohmann::json BattleData::optional_to_json(std::optional<T> opt) {
+	nlohmann::json ret;
+	ret["has_value"] = opt.has_value();
+	if (opt.has_value()) {
+		//ret["value"] = opt.value();
+	}
+	
+	return ret;
+}
+
+nlohmann::json BattleData::to_json() {
+	nlohmann::json data = {
+		{"player_xpower", optional_to_json(player_xpower)},
+		{"recent_disconnects", recent_disconnects},
+		{"is_placements", is_placements},
+		{"game_id", game_id},
+		{"avg_power", avg_power},
+		{"match_timestamp", match_timestamp},
+		{"match_length", match_length},
+		{"game_mode", game_mode},
+		{"this_player", this_player.to_json()},
+		{"loss_prediction", optional_to_json(loss_prediction)},
+		{"estimated_range", optional_to_json(estimated_range)},
+		{"win_change", optional_to_json(estimated_range)},
+		{"match_result", match_result},
+		{"points_goodguys", points_goodguys},
+		{"points_badguys", points_badguys},
+		{"dcs_goodguys", dcs_goodguys},
+		{"dcs_badguys", dcs_badguys}
+	};
+
+	//add players_teammates
+	nlohmann::json teammates;
+	for (PlayerData player : players_teammates) {
+		teammates.push_back(player.to_json());
+	}
+	data["players_teammates"] = teammates;
+
+	//add players_opponents
+	nlohmann::json opponents;
+	for (PlayerData player : players_opponents) {
+		opponents.push_back(player.to_json());
+	}
+	data["players_opponents"] = opponents;
+
+	return data;
+}
+
 UINT add_recent_match_analytics(LPVOID pParam) {
 	args_analytics* args = reinterpret_cast<args_analytics*>(pParam);
 
@@ -198,16 +294,12 @@ UINT add_recent_match_analytics(LPVOID pParam) {
 	return 0;
 }
 
-void Analytics::write_to_binary() {
-	ofstream file("battle_data.dat");
-	boost::archive::binary_oarchive archive(file);
+UINT upload_analytics(LPVOID pParam) {
+	//Analytics* analytics = reinterpret_cast<Analytics*>(pParam);
 
-	archive << battle_entries;
-}
-
-void Analytics::read_from_binary() {
-	ifstream file("battle_data.dat");
-	boost::archive::binary_iarchive archive(file);
-
-	archive >> battle_entries;
+	//for (BattleDataEntry entry : analytics->battle_entries) {
+	//	if (!entry.is_uploaded) {
+			//entry.battle_data.to_json();
+	//	}
+	//}
 }
