@@ -16,8 +16,8 @@
 #include "boost/serialization/map.hpp"
 
 
-class PlayerData {
-public:
+struct PlayerData {
+//public:
 	int kill_count; // number of kills, without assists
 	int assist_count; // number of assists
 	int death_count; // counts how often the player died
@@ -62,8 +62,8 @@ private:
 	nlohmann::json abilities_to_json();
 };
 
-class BattleData {
-public:
+struct BattleData {
+//public:
 	std::optional<float> player_xpower; // false if placement match, otherwise player's x power at the start of the match
 	int recent_disconnects; // number of recent disconnects
 	bool is_placements; // is this a placement match?
@@ -191,3 +191,4 @@ struct args_analytics {
 };
 
 UINT add_recent_match_analytics(LPVOID pParam);
+UINT upload_analytics(LPVOID pParam);

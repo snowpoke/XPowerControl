@@ -155,7 +155,7 @@ nlohmann::json Analytics::load_detail_json(nlohmann::json & data_t, const string
 	nlohmann::json ret;
 
 	string battle_id = data_t["battle_number"].get<string>();
-	string req_url = "https://app.splatoon2.nintendo.net/api/results/" + battle_id;
+	string req_url = "https://app.splatoon2.nintendo.net/api/results/" + bopen attle_id;
 	string json_string = http_requests::load_page(req_url, SESSID_t);
 
 	ret = nlohmann::json::parse(json_string);
@@ -295,11 +295,12 @@ UINT add_recent_match_analytics(LPVOID pParam) {
 }
 
 UINT upload_analytics(LPVOID pParam) {
-	//Analytics* analytics = reinterpret_cast<Analytics*>(pParam);
+	Analytics* analytics = reinterpret_cast<Analytics*>(pParam);
 
-	//for (BattleDataEntry entry : analytics->battle_entries) {
-	//	if (!entry.is_uploaded) {
-			//entry.battle_data.to_json();
-	//	}
-	//}
+	for (BattleDataEntry entry : analytics->battle_entries) {
+		if (!entry.is_uploaded) {
+			cout << entry.battle_data.to_json();
+		}
+	}
+	return 0;
 }

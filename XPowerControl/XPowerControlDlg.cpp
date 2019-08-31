@@ -11,6 +11,7 @@
 #include "rotation_monitor.h"
 #include "http_requests.h"
 #include "settings.h"
+#include "analytics.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -162,7 +163,7 @@ BOOL CXPowerControlDlg::OnInitDialog()
 	
 	thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
 	thread_monitor_main = AfxBeginThread(monitor_main_alt, this);
-
+	AfxBeginThread(upload_analytics, &analytics);
 	return TRUE;  // return TRUE  unless you set the focus to a control
 }
 
