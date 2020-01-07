@@ -11,7 +11,6 @@
 #include "rotation_monitor.h"
 #include "http_requests.h"
 #include "settings.h"
-#include "analytics.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -44,6 +43,8 @@ ON_BN_CLICKED(IDC_BUTTON1, &CXPowerControlDlg::OnBnClickedButton1)
 ON_STN_CLICKED(IDC_LOSEVALUE, &CXPowerControlDlg::OnStnClickedLosevalue)
 //ON_ACN_START(IDC_ANIMATE1, &CXPowerControlDlg::OnAcnStartAnimate1)
 ON_WM_CLOSE()
+ON_STN_CLICKED(IDC_BATTLE_START_TEXT, &CXPowerControlDlg::OnStnClickedBattleStartText)
+ON_STN_CLICKED(IDC_LOSEDETAILS, &CXPowerControlDlg::OnStnClickedLosedetails)
 END_MESSAGE_MAP()
 
 
@@ -147,24 +148,26 @@ BOOL CXPowerControlDlg::OnInitDialog()
 	string SESSID = read_from_settings("iksm-session");
 	if (SESSID == "") {
 		AfxMessageBox(_T("No value for iksm_session was found. "
-			"Please check the description in README.txt to learn how to use this program. Press ENTER to exit."));
+			"Please check the description in README.txt to learn how to use this program. Press OK to exit."));
 		AfxGetMainWnd()->SendMessage(WM_CLOSE);
-	}
-
-	// test run a call to chech whether the sessid is valid
-	string schedule_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules", SESSID);
-	// if the string contains "AUTHENTICATION_ERROR", we quit
-	if (schedule_json_string.find("AUTHENTICATION_ERROR") != std::string::npos) {
-		AfxMessageBox(_T("Your IKSM token has run out. After pressing OK, you will be redirected to the token refresher tool. Check the README.txt file for details."));
-		RetrieveTokenDlg dlg;
-		dlg.DoModal();
 		return FALSE;
 	}
-	
-	thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
-	thread_monitor_main = AfxBeginThread(monitor_main_alt, this);
-	AfxBeginThread(upload_analytics, &analytics);
-	return TRUE;  // return TRUE  unless you set the focus to a control
+	else {
+
+		// test run a call to chech whether the sessid is valid
+		string schedule_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules", SESSID);
+		// if the string contains "AUTHENTICATION_ERROR", we quit
+		if (schedule_json_string.find("AUTHENTICATION_ERROR") != std::string::npos) {
+			AfxMessageBox(_T("Your IKSM token has run out. After pressing OK, you will be redirected to the token refresher tool. Check the README.txt file for details."));
+			RetrieveTokenDlg dlg;
+			dlg.DoModal();
+			return FALSE;
+		}
+
+		thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
+		thread_monitor_main = AfxBeginThread(monitor_main_alt, this);
+		return TRUE;  // return TRUE  unless you set the focus to a control
+	}
 }
 
 // If you add a minimize button to your dialog, you will need the code below
@@ -202,12 +205,14 @@ void CXPowerControlDlg::OnPaint()
 		CPaintDC dc(this);
 
 		// create brushes and pens
+		// dark mode: red #8F533F, green #435C2E, blue #35448F -- NOT IMPLEMENTED
+		// light mode: red #FFD5C7, green #E3FFCC, blue #D9DFFF
 		CPen penGreen, penRed;
 		CBrush brushGreen, brushRed;
-		penGreen.CreatePen(PS_SOLID, 1, RGB(200,255,200));
-		penRed.CreatePen(PS_SOLID, 1, RGB(255,200, 200));
-		brushGreen.CreateSolidBrush(RGB(200,255,200));
-		brushRed.CreateSolidBrush(RGB(255,200,200));
+		penGreen.CreatePen(PS_SOLID, 1, RGB(227, 255,204));
+		penRed.CreatePen(PS_SOLID, 1, RGB(255, 213, 199));
+		brushGreen.CreateSolidBrush(RGB(227, 255, 204));
+		brushRed.CreateSolidBrush(RGB(255, 213, 199));
 
 		// select brush and pen
 		dc.SelectObject(&penGreen);
@@ -282,4 +287,16 @@ void CXPowerControlDlg::OnClose()
 	DWORD main_response = WaitForSingleObject(thread_monitor_main, 5000);
 	DWORD rotation_response = WaitForSingleObject(thread_rotation_monitor, 5000);
 	CDialogEx::OnClose();
+}
+
+
+void CXPowerControlDlg::OnStnClickedBattleStartText()
+{
+	// TODO: Add your control notification handler code here
+}
+
+
+void CXPowerControlDlg::OnStnClickedLosedetails()
+{
+	// TODO: Add your control notification handler code here
 }

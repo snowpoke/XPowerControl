@@ -46,6 +46,8 @@ public:
 //	afx_msg void OnAcnStartAnimate1();
 	CStatic m_loading_info;
 	CStatic m_battle_start_text;
-	Analytics analytics;
+	//Analytics analytics;
 	afx_msg void OnClose();
+	afx_msg void OnStnClickedBattleStartText();
+	afx_msg void OnStnClickedLosedetails();
 };
