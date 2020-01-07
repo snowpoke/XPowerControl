@@ -43,6 +43,8 @@ ON_BN_CLICKED(IDC_BUTTON1, &CXPowerControlDlg::OnBnClickedButton1)
 ON_STN_CLICKED(IDC_LOSEVALUE, &CXPowerControlDlg::OnStnClickedLosevalue)
 //ON_ACN_START(IDC_ANIMATE1, &CXPowerControlDlg::OnAcnStartAnimate1)
 ON_WM_CLOSE()
+ON_STN_CLICKED(IDC_BATTLE_START_TEXT, &CXPowerControlDlg::OnStnClickedBattleStartText)
+ON_STN_CLICKED(IDC_LOSEDETAILS, &CXPowerControlDlg::OnStnClickedLosedetails)
 END_MESSAGE_MAP()
 
 
@@ -203,12 +205,14 @@ void CXPowerControlDlg::OnPaint()
 		CPaintDC dc(this);
 
 		// create brushes and pens
+		// dark mode: red #8F533F, green #435C2E, blue #35448F -- NOT IMPLEMENTED
+		// light mode: red #FFD5C7, green #E3FFCC, blue #D9DFFF
 		CPen penGreen, penRed;
 		CBrush brushGreen, brushRed;
-		penGreen.CreatePen(PS_SOLID, 1, RGB(200,255,200));
-		penRed.CreatePen(PS_SOLID, 1, RGB(255,200, 200));
-		brushGreen.CreateSolidBrush(RGB(200,255,200));
-		brushRed.CreateSolidBrush(RGB(255,200,200));
+		penGreen.CreatePen(PS_SOLID, 1, RGB(227, 255,204));
+		penRed.CreatePen(PS_SOLID, 1, RGB(255, 213, 199));
+		brushGreen.CreateSolidBrush(RGB(227, 255, 204));
+		brushRed.CreateSolidBrush(RGB(255, 213, 199));
 
 		// select brush and pen
 		dc.SelectObject(&penGreen);
@@ -283,4 +287,16 @@ void CXPowerControlDlg::OnClose()
 	DWORD main_response = WaitForSingleObject(thread_monitor_main, 5000);
 	DWORD rotation_response = WaitForSingleObject(thread_rotation_monitor, 5000);
 	CDialogEx::OnClose();
+}
+
+
+void CXPowerControlDlg::OnStnClickedBattleStartText()
+{
+	// TODO: Add your control notification handler code here
+}
+
+
+void CXPowerControlDlg::OnStnClickedLosedetails()
+{
+	// TODO: Add your control notification handler code here
 }

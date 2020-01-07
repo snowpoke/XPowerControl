@@ -20,8 +20,8 @@ template<class T>
 using ModeInfo = std::array<T, 4>;
 
 // loads battle information
-void load_powers(float& zones_t, float& tower_t, float& rainmaker_t, float& clams_t, std::string SESSID_t);
-void load_powers(ModeInfo<float>& powers_t, std::string SESSID_t);
+void load_powers(float& zones_t, float& tower_t, float& rainmaker_t, float& clams_t, const ModeInfo<float>& ranges_t, std::string SESSID_t);
+void load_powers(ModeInfo<float>& powers_t, const ModeInfo<float>& ranges_t, std::string SESSID_t);
 void load_prev_match_info(int& start_time_t, float& power_after_t, std::string SESSID_t);
 void load_prev_match_info(int& start_time_t, std::string SESSID_t);
 Mode get_mode(std::string SESSID_t);
@@ -31,8 +31,8 @@ void load_ranges(ModeInfo<float>& ranges);
 // saves ranges into text files and sends them to the dialog
 void save_ranges(const float& zones_range_t, const float& tower_range_t, const float& rainmaker_range_t, const float& clams_range_t);
 void save_ranges(const ModeInfo<float>& ranges);
-void save_info(float power_t, std::optional<float> win_dist_t, std::optional<float> lose_dist_t, CXPowerControlDlg* window_t);
-void save_info(std::string power_t, std::string win_t, std::string lose_t, CXPowerControlDlg* window_t);
+void save_info(float power_t, std::optional<float> win_trunc_t, std::optional<float> lose_trunc_t, std::optional<float> win_dist_t, std::optional<float> lose_dist_t, CXPowerControlDlg* window_t);
+void save_info(std::string power_t, std::string win_t, std::string lose_t, std::string win_detail_t, std::string lose_detail_t, CXPowerControlDlg* window_t);
 
 // rounds the power after the second decimal to avoid float precision errors
 float round2(float val_t);

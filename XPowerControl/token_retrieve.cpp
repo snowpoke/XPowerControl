@@ -41,6 +41,10 @@ HANDLE mitm_start_alt() {
 
 	SetInformationJobObject(job_handle, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info));
 
+	// delete files that contain results from previous mitmdump processes
+	DeleteFile(L"authorization.txt");
+	DeleteFile(L"registration_token.txt");
+
 	// we start mitmdump
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
@@ -88,6 +92,11 @@ wstring access_token_to_iksm(string access_token_t) {
 	wstring ret = L"";
 
 	// we obtain the device registration token
+
+	// wait until registration token file is created
+	while (!boost::filesystem::exists("registration_token.txt")) {
+
+	}
 	ifstream file;
 	file.open("registration_token.txt");
 	string line;
