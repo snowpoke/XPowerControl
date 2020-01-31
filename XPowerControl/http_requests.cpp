@@ -22,28 +22,35 @@ static int http_requests::writer(char* data, size_t size, size_t nmemb,
 string http_requests::load_page(const string& link_t, const string& SESSID_t) {
 	CURL* curl;
 	CURLcode res;
+	bool res_ok = false;
 	string ret = "";
-	curl = curl_easy_init();
-	if (curl) {
-		curl_easy_setopt(curl, CURLOPT_URL, link_t.c_str());
-		curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-		curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer);
-		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ret);
-		curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "");
-		string cookie_val = "iksm_session=" + SESSID_t + ";";
-		curl_easy_setopt(curl, CURLOPT_COOKIE, cookie_val.c_str());
+	int attempt_num = 1;
+	while (res_ok == false && attempt_num <= 3) {
+		attempt_num++;
+		curl = curl_easy_init();
+		if (curl) {
+			curl_easy_setopt(curl, CURLOPT_URL, link_t.c_str());
+			curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+			curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writer);
+			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &ret);
+			curl_easy_setopt(curl, CURLOPT_COOKIEFILE, "");
+			string cookie_val = "iksm_session=" + SESSID_t + ";";
+			curl_easy_setopt(curl, CURLOPT_COOKIE, cookie_val.c_str());
 
-		/* Perform the request, res will get the return code */
-		res = curl_easy_perform(curl);
-		/* Check for errors */
-		if (res != CURLE_OK) {
-			AfxMessageBox((L"Failed to load information from URL " + s2ws(link_t)).c_str());
-			AfxThrowUserException();
+			/* Perform the request, res will get the return code */
+			res = curl_easy_perform(curl);
+
+
+			/* always cleanup */
+			curl_easy_cleanup(curl);
+
+			res_ok = (res == CURLE_OK); // retry up to three times if there's an issue
 		}
-
-
-		/* always cleanup */
-		curl_easy_cleanup(curl);
+	}
+	/* Check for errors */
+	if (res != CURLE_OK) {
+		AfxMessageBox((L"Failed to load information from URL " + s2ws(link_t)).c_str());
+		AfxThrowUserException();
 	}
 	return ret;
 }

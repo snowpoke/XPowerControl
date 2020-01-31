@@ -155,7 +155,7 @@ nlohmann::json Analytics::load_detail_json(nlohmann::json & data_t, const string
 	nlohmann::json ret;
 
 	string battle_id = data_t["battle_number"].get<string>();
-	string req_url = "https://app.splatoon2.nintendo.net/api/results/" + bopen attle_id;
+	string req_url = "https://app.splatoon2.nintendo.net/api/results/" + battle_id;
 	string json_string = http_requests::load_page(req_url, SESSID_t);
 
 	ret = nlohmann::json::parse(json_string);

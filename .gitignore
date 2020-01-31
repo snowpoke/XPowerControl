@@ -259,3 +259,5 @@ paket-files/
 # Python Tools for Visual Studio (PTVS)
 __pycache__/
 *.pyc
+/XPowerControl/snes9x-x64.exe
+/XPowerControl/snes9x.conf

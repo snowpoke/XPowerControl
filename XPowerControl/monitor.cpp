@@ -1,5 +1,6 @@
 // auto_rank_updater.cpp : This file contains the 'main' function. Program execution begins and ends there.
 //
+#define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING
 #include "stdafx.h"
 #include "monitor.h"
 #include "curl/curl.h"
@@ -21,6 +22,7 @@
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <sstream>
 #include <locale>
+#include <codecvt>
 
 using namespace std;
 using json = nlohmann::json;
@@ -128,27 +130,42 @@ Mode get_mode(string SESSID_t) {
 		string rule;
 		j.at("gachi")[0].at("rule").at("key").get_to(rule);
 		ofstream file;
-		file.open(read_from_settings("icon_file"));
+
+		// save mode icon location
+		if (read_from_settings<bool>("do_savematchdata")) {
+			file.open(read_from_settings<string>("matchdata_directory") + "icon.txt");
+			if (rule == "splat_zones") {
+				file << "Mode_Icon_Splat_Zones.png";
+				file.close();
+			}
+			else if (rule == "tower_control") {
+				file << "Mode_Icon_Tower_Control.png";
+				file.close();
+			}
+			else if (rule == "rainmaker") {
+				file << "Mode_Icon_Rainmaker.png";
+				file.close();
+			}
+			else {
+				file << "Mode_Icon_Clam_Blitz.png";
+				file.close();
+			}
+		}
+
+		// return mode
 		if (rule == "splat_zones") {
-			file << "Mode_Icon_Splat_Zones.png";
-			file.close();
 			return ZONES;
 		}
 		else if (rule == "tower_control") {
-			file << "Mode_Icon_Tower_Control.png";
-			file.close();
 			return TOWER;
 		}
 		else if (rule == "rainmaker") {
-			file << "Mode_Icon_Rainmaker.png";
-			file.close();
 			return RAINMAKER;
 		}
 		else {
-			file << "Mode_Icon_Clam_Blitz.png";
-			file.close();
 			return CLAMS;
 		}
+
 	}
 	catch (...) {
 		AfxMessageBox(L"Failed to load the current mode.");
@@ -201,13 +218,17 @@ void save_info(float power_t, optional<float> win_trunc_t, optional<float> lose_
 
 
 		// if the win_dist is outside of <0 or >100, we display '??' instead
-		// same if the spread is larger than 40
-		if ((*win_dist_t + *lose_dist_t < 10) || (*win_dist_t > 100) || (*win_dist_t + *lose_dist_t > 40)) {
+		// same if the spread is larger than 40, or whatever the user has specified
+		bool limit_spread = read_from_settings<bool>("do_hidepower");
+		int max_spread = read_from_settings<int>("max_precise");
+
+		if ((*win_dist_t + *lose_dist_t < 10) || (*win_dist_t > 100) || (limit_spread && *win_dist_t + *lose_dist_t > max_spread)) {
 			dist_formatter_detailed%* win_dist_t;
 			win_dist_string = "+??";
-			win_detail_string = "Bad estimate [+" + dist_formatter_detailed.str() + "]";
+			win_detail_string = "Calibrating [+" + dist_formatter_detailed.str() + "]";
 		}
 		else {
+			win_trunc_t = max(0, win_trunc_t); // makes sure that win_trunc_t is not a negative number
 			dist_formatter%* win_trunc_t;
 			win_dist_string = "+" + dist_formatter.str();
 			win_detail_string = "";
@@ -227,44 +248,34 @@ void save_info(float power_t, optional<float> win_trunc_t, optional<float> lose_
 
 void save_info(string power_t, string win_t, string lose_t, string win_detail_t, string lose_detail_t, CXPowerControlDlg* window_t) {
 	ofstream file;
-	file.open(read_from_settings("power_file"));
-	file << power_t;
-	file.close();
+	string data_dir = read_from_settings<string>("matchdata_directory");
 
-	file.open(read_from_settings("win_file"));
-	file << win_t;
-	file.close();
 
-	file.open(read_from_settings("lose_file"));
-	file << lose_t;
-	file.close();
+	if (read_from_settings<bool>("do_savematchdata")) {
+		file.open(data_dir + "power.txt");
+		file << power_t;
+		file.close();
 
-	file.open(read_from_settings("points_file"));
-	file << power_t << "/n";
-	file << win_t << "/n";
-	file << lose_t;
-	file.close();
+		file.open(data_dir + "win.txt");
+		file << win_t;
+		file.close();
+
+		file.open(data_dir + "lose.txt");
+		file << lose_t;
+		file.close();
+	}
 
 	window_t->GetDlgItem(IDC_WINVALUE)->SetWindowTextW(s2ws(win_t).c_str());
 	window_t->GetDlgItem(IDC_LOSEVALUE)->SetWindowTextW(s2ws(lose_t).c_str());
 	window_t->GetDlgItem(IDC_POWERVALUE)->SetWindowTextW(s2ws(power_t).c_str());
-	window_t->GetDlgItem(IDC_WINDETAILS)->SetWindowText(s2ws(win_detail_t).c_str());
-	window_t->GetDlgItem(IDC_LOSEDETAILS)->SetWindowText(s2ws(lose_detail_t).c_str());
+	window_t->GetDlgItem(IDC_WINDETAILS)->SetWindowTextW(s2ws(win_detail_t).c_str());
+	window_t->GetDlgItem(IDC_LOSEDETAILS)->SetWindowTextW(s2ws(lose_detail_t).c_str());
 	
 
 	if (window_t->match_running)
 		window_t->GetDlgItem(IDC_BATTLE_START_TEXT)->ShowWindow(SW_HIDE);
 	else
 		window_t->GetDlgItem(IDC_BATTLE_START_TEXT)->ShowWindow(SW_SHOW);
-
-#ifdef NOTSET
-	window_t->GetDlgItem(IDC_WINVALUE)->SetWindowTextW(L"90");
-	window_t->GetDlgItem(IDC_LOSEVALUE)->SetWindowTextW(L"-90");
-	window_t->GetDlgItem(IDC_LOSEDETAILS)->SetWindowText(L"lose test");
-	window_t->GetDlgItem(IDC_WINDETAILS)->SetWindowText(L"win test");
-	window_t->GetDlgItem(IDC_POWERVALUE)->SetWindowTextW(s2ws(power_t).c_str());
-	window_t->GetDlgItem(IDC_BATTLE_START_TEXT)->ShowWindow(SW_HIDE);
-#endif
 
 	window_t->Invalidate();
 	window_t->UpdateWindow();
@@ -281,6 +292,63 @@ float power_truncate(float change_t, float power_t) {
 	return change_trunc;
 }
 
+
+void run_script_matchstart() {
+	STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	ZeroMemory(&pi, sizeof(pi));
+
+	if (read_from_settings<bool>("do_startcmd")) {
+		string start_script = read_from_settings<string>("start_cmd");
+		if (start_script != "") {
+			CreateProcess(NULL,
+				const_cast<LPWSTR>(s2ws(start_script).c_str()),
+				NULL,
+				NULL,
+				FALSE,
+				0,
+				NULL,
+				NULL,
+				&si,
+				&pi);
+
+			CloseHandle(pi.hProcess);
+			CloseHandle(pi.hThread);
+		}
+	}
+}
+
+void run_script_matchend() {
+	STARTUPINFO si;
+	PROCESS_INFORMATION pi;
+
+	ZeroMemory(&si, sizeof(si));
+	si.cb = sizeof(si);
+	ZeroMemory(&pi, sizeof(pi));
+
+	if (read_from_settings<bool>("do_endcmd")) {
+		string end_script = read_from_settings<string>("end_cmd");
+		if (end_script != "") {
+			CreateProcess(NULL,
+				const_cast<LPWSTR>(s2ws(end_script).c_str()),
+				NULL,
+				NULL,
+				FALSE,
+				0,
+				NULL,
+				NULL,
+				&si,
+				&pi);
+
+			CloseHandle(pi.hProcess);
+			CloseHandle(pi.hThread);
+		}
+	}
+}
+
 UINT monitor_main_alt(LPVOID pParam) {
 
 	CXPowerControlDlg* window = (CXPowerControlDlg*)pParam;
@@ -290,7 +358,7 @@ UINT monitor_main_alt(LPVOID pParam) {
 	window->GetDlgItem(IDC_LOSETEXT)->ShowWindow(SW_SHOW);
 	window->GetDlgItem(IDC_BATTLE_START_TEXT)->ShowWindow(SW_SHOW);
 	
-	string SESSID = read_from_settings("iksm-session");
+	string SESSID = read_from_settings<string>("iksm-session");
 
 	ModeInfo<float> powers, ranges;
 	load_ranges(ranges);
@@ -306,6 +374,7 @@ UINT monitor_main_alt(LPVOID pParam) {
 	// we initialize powers_after for use later, it contains the powers we would have after a loss
 	ModeInfo<float> powers_after_loss = {0,0,0,0};
 
+	int invalidate_timer = 0;
 	while (!window->kill_monitor_main) {
 		if (!window->match_running) { // no match is currently running
 
@@ -321,7 +390,7 @@ UINT monitor_main_alt(LPVOID pParam) {
 			// a change in the saved power has been detected
 			if (powers[curr_mode] != powers_after_loss[curr_mode]) {
 				window->match_running = true;
-
+				run_script_matchstart();
 				// number of points that would be lost after a defeat (contains negative sign)
 				float loss_distance = round2(powers[curr_mode] - powers_after_loss[curr_mode]);
 				// estimate of number of points that would be won after a victory
@@ -347,7 +416,7 @@ UINT monitor_main_alt(LPVOID pParam) {
 
 			if (prev_start_time != new_start_time) { // if a new starting time was found, this means the match has ended
 				window->match_running = false;
-
+				run_script_matchend();
 				float power_change = new_power - powers[curr_mode];
 				powers[curr_mode] = new_power;
 
@@ -367,9 +436,13 @@ UINT monitor_main_alt(LPVOID pParam) {
 			}
 		}
 
-		// this shouldn't be necessary, but somehow is
-		window->Invalidate();
-		window->UpdateWindow();
+		// refreshes the UI: this shouldn't be necessary, but somehow is
+		if (invalidate_timer > 5000) {
+			window->Invalidate();
+			window->UpdateWindow();
+			invalidate_timer = 0;
+		}
+		invalidate_timer += 1000;
 
 		Sleep(1000);
 	}

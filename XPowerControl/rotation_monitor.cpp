@@ -30,9 +30,10 @@ void write_timestamp_end(int timestamp, const string& filename) {
 UINT monitor_rotation(LPVOID pParam) {
 
 	CXPowerControlDlg* window = (CXPowerControlDlg*)pParam;
-	string SESSID = read_from_settings("iksm-session");
-	string countdown_filename = read_from_settings("countdown_file");
-	string timestamp_filename = read_from_settings("timestamp_file");
+	string SESSID = read_from_settings<string>("iksm-session");
+	string matchdata_dir = read_from_settings<string>("matchdata_directory");
+	string countdown_filename = matchdata_dir + "countdown.txt";
+	string timestamp_filename = matchdata_dir + "timestamp.txt";
 
 	// check current rotation
 	string schedule_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules",SESSID);

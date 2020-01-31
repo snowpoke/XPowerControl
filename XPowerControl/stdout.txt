@@ -1,0 +1,3 @@
+Reading config file C:\Users\fkpma\source\repos\XPowerControl\XPowerControl\snes9x.conf.
+Saving	config file	C:\Users\fkpma\source\repos\XPowerControl\XPowerControl\snes9x.conf
+Saving	config file	C:\Users\fkpma\source\repos\XPowerControl\XPowerControl\snes9x.conf

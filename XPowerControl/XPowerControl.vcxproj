@@ -205,36 +205,49 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CSettingsDialog.h" />
+    <ClInclude Include="FirstSetupDlg.h" />
+    <ClInclude Include="FirstSetupDlg2.h" />
     <ClInclude Include="http_requests.h" />
     <ClInclude Include="monitor.h" />
+    <ClInclude Include="NewTokenDlg.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="RetrievalProgressDlg.h" />
     <ClInclude Include="RetrieveTokenDlg.h" />
     <ClInclude Include="rotation_monitor.h" />
     <ClInclude Include="Analytics.h" />
     <ClInclude Include="serialize_std_optional.h" />
     <ClInclude Include="settings.h" />
+    <ClInclude Include="SetupRetrievalDlg.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="TokenRetriever.h" />
     <ClInclude Include="token_retrieve.h" />
     <ClInclude Include="wstring_transform.h" />
     <ClInclude Include="XPowerControl.h" />
     <ClInclude Include="XPowerControlDlg.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CSettingsDialog.cpp" />
+    <ClCompile Include="FirstSetupDlg.cpp" />
+    <ClCompile Include="FirstSetupDlg2.cpp" />
     <ClCompile Include="http_requests.cpp" />
     <ClCompile Include="monitor.cpp" />
+    <ClCompile Include="NewTokenDlg.cpp" />
+    <ClCompile Include="RetrievalProgressDlg.cpp" />
     <ClCompile Include="RetrieveTokenDlg.cpp" />
     <ClCompile Include="rotation_monitor.cpp" />
     <ClCompile Include="Analytics.cpp" />
     <ClCompile Include="settings.cpp" />
+    <ClCompile Include="SetupRetrievalDlg.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="TokenRetriever.cpp" />
     <ClCompile Include="token_retrieve.cpp" />
-    <ClCompile Include="wstring_transform.cpp" />
     <ClCompile Include="XPowerControl.cpp" />
     <ClCompile Include="XPowerControlDlg.cpp" />
   </ItemGroup>
@@ -246,6 +259,8 @@
     <None Include="res\XPowerControl.rc2" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="res\bitmap1.bmp" />
+    <Image Include="res\bmp00001.bmp" />
     <Image Include="res\icon1.ico" />
     <Image Include="res\XPowerControl.ico" />
   </ItemGroup>

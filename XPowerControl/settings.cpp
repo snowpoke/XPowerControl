@@ -3,22 +3,23 @@
 #include <fstream>
 #include <iostream>
 #include "nlohmann/json.hpp"
+#include <optional>
 
 using namespace std;
 
-string read_from_settings(string key_t) {
+bool settings_exist(string key_t) {
 	try {
-		string ret;
+		bool ret;
 		ifstream file("settings.txt");
 		nlohmann::json j;
 		file >> j;
-		j.at(key_t).get_to(ret);
+		ret = (j.find(key_t) != j.end());
 		return ret;
 	}
 	catch (...) {
 		cout << "Failed to open settings file.";
 		MessageBox(NULL, (LPCWSTR)L"Failed to open settings file.", (LPCWSTR)L"File error", MB_OK);
 
-		return "";
+		return false;
 	}
 }

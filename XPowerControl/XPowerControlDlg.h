@@ -35,6 +35,8 @@ public:
 	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
 //	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
 	afx_msg void OnBnClickedButton1();
+	bool start_monitoring();
+	void stop_monitoring();
 	bool match_running = false;
 	bool update_rotation = false;
 	bool kill_monitor_main = false; // flag whether monitor_main should be stopped
@@ -50,4 +52,9 @@ public:
 	afx_msg void OnClose();
 	afx_msg void OnStnClickedBattleStartText();
 	afx_msg void OnStnClickedLosedetails();
+	afx_msg void OnStnClickedSettings();
+	CBitmap m_bitmapSettings;
+	CButton m_buttonSettings;
+	ULONG_PTR gdiplusToken; // required for GDI+
+	CStatic staticbtn_settings;
 };

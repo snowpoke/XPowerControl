@@ -6,11 +6,16 @@
 #include "XPowerControl.h"
 #include "XPowerControlDlg.h"
 #include "RetrieveTokenDlg.h"
+#include "CSettingsDialog.h"
 #include "afxdialogex.h"
 #include "monitor.h"
 #include "rotation_monitor.h"
 #include "http_requests.h"
 #include "settings.h"
+#include "NewTokenDlg.h"
+#include "analytics.h"
+#include "FirstSetupDlg.h"
+#include <filesystem>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -45,8 +50,47 @@ ON_STN_CLICKED(IDC_LOSEVALUE, &CXPowerControlDlg::OnStnClickedLosevalue)
 ON_WM_CLOSE()
 ON_STN_CLICKED(IDC_BATTLE_START_TEXT, &CXPowerControlDlg::OnStnClickedBattleStartText)
 ON_STN_CLICKED(IDC_LOSEDETAILS, &CXPowerControlDlg::OnStnClickedLosedetails)
+ON_STN_CLICKED(IDC_STATICBTN_SETTINGS, &CXPowerControlDlg::OnStnClickedSettings)
 END_MESSAGE_MAP()
 
+
+bool CXPowerControlDlg::start_monitoring() {
+	// run game monitor
+	string SESSID = read_from_settings<string>("iksm-session");
+	if (SESSID == "") {
+		//AfxMessageBox(_T("No value for iksm_session was found. "
+		//	"If this is your first time running this program, please read the README.txt file."));
+		//NewTokenDlg dlg(INFO_NOIKSM);
+		//dlg.DoModal();
+		FirstSetupDlg dlg;
+		dlg.DoModal();
+		start_monitoring();
+	}
+	else {
+
+		// test run a call to chech whether the sessid is valid
+		string schedule_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules", SESSID);
+		// if the string contains "AUTHENTICATION_ERROR", we quit
+		if (schedule_json_string.find("AUTHENTICATION_ERROR") != std::string::npos) {
+			NewTokenDlg dlg(INFO_EXPIRED);
+			dlg.DoModal();
+			start_monitoring();
+		}
+
+		thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
+		thread_monitor_main = AfxBeginThread(monitor_main_alt, this);
+		return TRUE;  // return TRUE  unless you set the focus to a control
+	}
+}
+
+
+
+void  CXPowerControlDlg::stop_monitoring() {
+	kill_monitor_main = true;
+	kill_rotation_monitor = true;
+	DWORD main_response = WaitForSingleObject(thread_monitor_main, 5000);
+	DWORD rotation_response = WaitForSingleObject(thread_rotation_monitor, 5000);
+}
 
 // CXPowerControlDlg message handlers
 
@@ -54,10 +98,18 @@ BOOL CXPowerControlDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
 
+
 	// Set the icon for this dialog.  The framework does this automatically
 	//  when the application's main window is not a dialog
 	SetIcon(m_hIcon, TRUE);			// Set big icon
 	SetIcon(m_hIcon, FALSE);		// Set small icon
+
+	// Initialize GDI+
+	Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+	Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+	staticbtn_settings.Create(_T(""),
+		WS_CHILD | WS_VISIBLE | SS_ICON | SS_CENTERIMAGE | SS_NOTIFY | SS_REALSIZEIMAGE,
+		CRect(247, 113, 272, 138), this, IDC_STATICBTN_SETTINGS);
 
 	// TODO: Add extra initialization here
 	CFont *powerFont = new CFont();
@@ -143,31 +195,69 @@ BOOL CXPowerControlDlg::OnInitDialog()
 #endif
 
 
-	// run game monitor
+	// check validity of the settings
 
-	string SESSID = read_from_settings("iksm-session");
-	if (SESSID == "") {
-		AfxMessageBox(_T("No value for iksm_session was found. "
-			"Please check the description in README.txt to learn how to use this program. Press OK to exit."));
-		AfxGetMainWnd()->SendMessage(WM_CLOSE);
-		return FALSE;
+	// See if settings.txt exists
+	if (!filesystem::exists("settings.txt")) {
+		AfxMessageBox(_T("No settings file has been found. A new file will be created, but there might be an error in your woomyDX installation."));
+		ofstream out_file("settings.txt");
+		out_file << "{}";
+		out_file.close();
 	}
-	else {
 
-		// test run a call to chech whether the sessid is valid
-		string schedule_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules", SESSID);
-		// if the string contains "AUTHENTICATION_ERROR", we quit
-		if (schedule_json_string.find("AUTHENTICATION_ERROR") != std::string::npos) {
-			AfxMessageBox(_T("Your IKSM token has run out. After pressing OK, you will be redirected to the token refresher tool. Check the README.txt file for details."));
-			RetrieveTokenDlg dlg;
-			dlg.DoModal();
-			return FALSE;
-		}
-
-		thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
-		thread_monitor_main = AfxBeginThread(monitor_main_alt, this);
-		return TRUE;  // return TRUE  unless you set the focus to a control
+	// Try to parse settings.txt as JSON
+	try {
+		nlohmann::json j;
+		ifstream in_file("settings.txt");
+		in_file >> j;
+		in_file.close();
 	}
+	catch (...) {
+		AfxMessageBox(_T("Your settings file is corrupted. A new file will be created, but there might be an error in your woomyDX installation."));
+		ofstream out_file("settings.txt");
+		out_file << "{}";
+		out_file.close();
+	}
+
+	// we try to read the settings version from the file and confirm that it is up to date
+	bool is_current_version = false;
+	int settings_version = 0;
+	nlohmann::json j;
+	if (settings_exist("settings_version")) {
+		settings_version = read_from_settings<int>("settings_version");
+		if (settings_version == CURRENT_SETTING_VERSION)
+			is_current_version = true;
+	}
+
+	if (!is_current_version) { // if the version is not up to date, we transfer the data
+
+		j["settings_version"] = 3;
+		j["iksm-session"] = read_from_settings<string>("iksm_session","");
+		j["mitm_exec"] = read_from_settings<string>("mitm_exec", "");
+		j["emu_exec"] = read_from_settings<string>("emu_exec", "");
+		j["emu_cmd"] = read_from_settings<string>("emu_cmd", "");
+		j["matchdata_directory"] = read_from_settings<string>("matchdata_directory", "");
+		j["start_cmd"] = read_from_settings<string>("start_cmd", "");
+		j["end_cmd"] = read_from_settings<string>("end_cmd", "");
+		j["max_precise"] = read_from_settings<int>("max_precise", 40);
+		j["do_savematchdata"] = read_from_settings<bool>("do_savematchdata", true);
+		j["do_startcmd"] = read_from_settings<bool>("do_startcmd", false);
+		j["do_endcmd"] = read_from_settings<bool>("do_endcmd", false);
+		j["do_hidepower"] = read_from_settings<bool>("do_hidepower", true);
+		j["do_ontop"] = read_from_settings<bool>("do_ontop", true);
+
+		ofstream out_file("settings.txt");
+		out_file << j;
+		out_file.close();
+	}
+
+	// sets the window to be always on top
+	if (read_from_settings<bool>("do_ontop"))
+		SetWindowPos(&this->wndTopMost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
+	start_monitoring();
+
+	return true;
 }
 
 // If you add a minimize button to your dialog, you will need the code below
@@ -237,17 +327,21 @@ HCURSOR CXPowerControlDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
-
-
 HBRUSH CXPowerControlDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 {
+
 	switch (nCtlColor)
 	{
 	case CTLCOLOR_STATIC:
-		/*if(pWnd->GetDlgCtrlID() == IDC_WINVALUE || pWnd->GetDlgCtrlID() == IDC_WINTEXT)
-			pDC->SetBkColor(RGB(200, 255, 200));
-		if (pWnd->GetDlgCtrlID() == IDC_LOSEVALUE || pWnd->GetDlgCtrlID() == IDC_LOSETEXT)
-			pDC->SetBkColor(RGB(255, 200, 200));*/
+		// add settings wheel to settings button
+		if (pWnd->GetDlgCtrlID() == IDC_STATICBTN_SETTINGS) {
+			Gdiplus::Bitmap* settings_bitmap;
+			HICON settings_icon;
+			settings_bitmap = Gdiplus::Bitmap::FromFile(L"settings.png");
+			settings_bitmap->GetHICON(&settings_icon);
+			DrawIconEx(*pDC, 0, 0, settings_icon,25,25,0,NULL, DI_NORMAL | DI_COMPAT);
+			DestroyIcon(settings_icon);
+		}
 		pDC->SetBkMode(TRANSPARENT);
 		return (HBRUSH)GetStockObject(NULL_BRUSH);
 	default:
@@ -281,11 +375,8 @@ void CXPowerControlDlg::OnStnClickedLosevalue()
 
 void CXPowerControlDlg::OnClose()
 {
-	// TODO: Add your message handler code here and/or call default
-	kill_monitor_main = true;
-	kill_rotation_monitor = true;
-	DWORD main_response = WaitForSingleObject(thread_monitor_main, 5000);
-	DWORD rotation_response = WaitForSingleObject(thread_rotation_monitor, 5000);
+	stop_monitoring();
+	Gdiplus::GdiplusShutdown(gdiplusToken);
 	CDialogEx::OnClose();
 }
 
@@ -299,4 +390,12 @@ void CXPowerControlDlg::OnStnClickedBattleStartText()
 void CXPowerControlDlg::OnStnClickedLosedetails()
 {
 	// TODO: Add your control notification handler code here
+}
+
+
+void CXPowerControlDlg::OnStnClickedSettings() {
+	CSettingsDialog settings_dlg;
+	settings_dlg.DoModal();
+	stop_monitoring();
+	start_monitoring();
 }

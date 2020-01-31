@@ -1,7 +1,9 @@
+#include "TokenRetriever.h"
 #include "stdafx.h"
 #include "RetrieveTokenDlg.h"
 #include "token_retrieve.h"
 #include "nlohmann/json.hpp"
+#include "wstring_transform.h"
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
 #include <fstream>
@@ -9,9 +11,7 @@
 
 using namespace std;
 
-
-HANDLE mitm_start_alt() {
-	DeleteFile(L"token.txt");
+HANDLE TokenRetriever::run_command(wstring command_t) {
 
 	// we create an empty job object that will contain the process
 	HANDLE job_handle = CreateJobObject(NULL, NULL);
@@ -25,10 +25,6 @@ HANDLE mitm_start_alt() {
 
 	SetInformationJobObject(job_handle, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info));
 
-	// delete files that contain results from previous mitmdump processes
-	DeleteFile(L"authorization.txt");
-	DeleteFile(L"registration_token.txt");
-
 	// we start mitmdump
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
@@ -39,8 +35,8 @@ HANDLE mitm_start_alt() {
 	si.cb = sizeof(si);
 	ZeroMemory(&pi, sizeof(pi));
 
-	CreateProcess(L"mitmdump.exe",
-		L"mitmdump.exe -s mitm_script.py",
+	CreateProcess(NULL,
+		&command_t[0],
 		NULL,
 		NULL,
 		FALSE,
@@ -53,29 +49,80 @@ HANDLE mitm_start_alt() {
 	// we associate the mitmdump with the job we created
 	AssignProcessToJobObject(job_handle, pi.hProcess);
 
-	return job_handle;
+	return job_handle; // save handle to this object
 }
 
 
-static int writer(char *data, size_t size, size_t nmemb,
-	std::string *writerData)
+void TokenRetriever::mitm_start() {
+	DeleteFile(L"token.txt");
+
+	// delete files that contain results from previous mitmdump processes
+	DeleteFile(L"authorization.txt");
+	DeleteFile(L"registration_token.txt");
+
+	// get full path for mitm_script.py
+	wchar_t buffer[MAX_PATH];
+	GetModuleFileName(NULL, buffer, MAX_PATH); // saves path of current executable in buffer
+	size_t found = wstring(buffer).find_last_of('\\');
+	wstring mitm_script_location = wstring(buffer).substr(0, found + 1) + L"mitm_script.py";
+
+	mitm_handle = run_command(mitm_exec + L" -s \"" + mitm_script_location + L"\"");
+}
+
+void TokenRetriever::emu_start() {
+	emu_handle = run_command(emu_command);
+}
+
+
+
+int TokenRetriever::writer(char* data, size_t size, size_t nmemb,
+	std::string* writerData)
 {
 	if (writerData == NULL)
 		return 0;
 
-	writerData->append(data, size*nmemb);
+	writerData->append(data, size * nmemb);
 
 	return static_cast<int>(size * nmemb);
 }
 
 
-wstring access_token_to_iksm(string access_token_t, RetrieveTokenDlg* tokenDlg_t) {
-	CURL *curl1;
-	CURL *curl2;
+// trim from start (in place)
+static inline void ltrim(std::string& s) {
+	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch) {
+		return !std::isspace(ch);
+	}));
+}
+
+// we sometimes get multiple json datasets in one response, we remove all but the first one
+string TokenRetriever::remove_multi_response(string buffer_t) {
+	ltrim(buffer_t); // we trim from from the left, just to make sure this algorithm doesn't fail because of a space at the start
+	int brackets = 0;
+	string out_string = "";
+	for (char& c : buffer_t) {
+		out_string += c;
+		if (c == '{')
+			brackets++;
+		else if (c == '}')
+			brackets--;
+		if (brackets == 0) // since the very first character is {, this should only be 0 after the section has been closed
+			break;
+	}
+
+	return out_string;
+}
+
+
+wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
+	CURL* curl1;
+	CURL* curl2;
 	CURLcode res;
 	wstring ret = L"";
 
-	tokenDlg_t->tokenEdit.SetWindowTextW(L"Found authorization key! Retrieving token...");
+	if(status_element)
+		(*status_element)->SetWindowTextW(L"Found authorization key! Retrieving token... [Auth Key Attempt #1]");
+
+	progress_percent = 70;
 
 	// we obtain the device registration token
 
@@ -85,33 +132,43 @@ wstring access_token_to_iksm(string access_token_t, RetrieveTokenDlg* tokenDlg_t
 	}
 
 	string registration_token = "";
+	int attempt_num = 0;
 	try {
-		ifstream file;
-		file.open("registration_token.txt");
-		string line;
 		string file_text = "";
+		do {
+			attempt_num++;
+			if (status_element)
+				(*status_element)->SetWindowTextW((L"Found authorization key! Retrieving token... [Auth Key Attempt #"
+					+ to_wstring(attempt_num) + L"1]").c_str());
+			ifstream file;
+			file.open("registration_token.txt");
+			string line;
 
-		while (getline(file, line)) {
-			file_text += line;
-		}
-
-
+			while (getline(file, line)) {
+				file_text += line;
+			}
+			Sleep(50);
+		} while (file_text.length() == 0 && attempt_num <= 3);
+		file_text = remove_multi_response(file_text); // we sometimes get two datasets as a response, we remove all but the first here
 		nlohmann::json j = nlohmann::json::parse(file_text);
 		registration_token = j["parameter"]["registrationToken"].get<string>();
 	}
-	catch (...) {
-		AfxMessageBox(L"Failed retrieving the registration token. Please try again or retrieve the token manually.");
+	catch (const exception & e) {
+		AfxMessageBox((L"Failed retrieving the registration token. Please try again or retrieve the token manually. " + s2ws(e.what())).c_str());
 		AfxThrowUserException();
 	}
 
-	tokenDlg_t->tokenEdit.SetWindowTextW(L"Retrieving token... [Registration Token OK]");
+	if (status_element)
+		(*status_element)->SetWindowTextW(L"Retrieving token... [Registration Token OK]");
 
+	progress_percent = 80;
 	// we obtain the WebServiceToken
 	string gamewebtoken = "";
-	int attempt_num = 1;
+	attempt_num = 1;
 	while (gamewebtoken == "" && attempt_num <= 3) {
 		wstring dlg_text = L"Retrieving token... [Gamewebtoken Attempt #" + to_wstring(attempt_num) + L"]";
-		tokenDlg_t->tokenEdit.SetWindowTextW(dlg_text.c_str());
+		if (status_element)
+			(*status_element)->SetWindowTextW(dlg_text.c_str());
 		attempt_num++;
 		curl1 = curl_easy_init();
 
@@ -153,13 +210,14 @@ wstring access_token_to_iksm(string access_token_t, RetrieveTokenDlg* tokenDlg_t
 		Using access token " + access_token_t + "\n \
 		Using post data " + data + "\n \
 		Obtained response " + buffer + "\n\n\n");
-
+			buffer = remove_multi_response(buffer);
 			try {
 				nlohmann::json j = nlohmann::json::parse(buffer);
 				gamewebtoken = j["result"]["accessToken"].get<string>();
 			}
-			catch (...) {
+			catch (const exception& e) {
 				wstring afx_message = L"Failed to read the token from file. (Attempt " + to_wstring(attempt_num - 1) + L"/3)";
+				afx_message += s2ws(e.what());
 				AfxMessageBox(afx_message.c_str());
 				continue;
 			}
@@ -172,10 +230,12 @@ wstring access_token_to_iksm(string access_token_t, RetrieveTokenDlg* tokenDlg_t
 		AfxThrowUserException();
 	}
 
+	progress_percent = 90;
 	attempt_num = 1;
 	while (ret == L"" && attempt_num <= 3) {
 		wstring dlg_text = L"Retrieving token... [Authorization Attempt #" + to_wstring(attempt_num) + L"]";
-		tokenDlg_t->tokenEdit.SetWindowTextW(dlg_text.c_str());
+		if (status_element)
+			(*status_element)->SetWindowTextW(dlg_text.c_str());
 		attempt_num++;
 
 		curl2 = curl_easy_init();
@@ -249,7 +309,7 @@ wstring access_token_to_iksm(string access_token_t, RetrieveTokenDlg* tokenDlg_t
 			continue;
 		}
 	}
-	
+
 	if (ret == L"") {
 		AfxMessageBox(L"The program failed to obtain the authorization token. Please try again or retrieve the token manually.");
 		AfxThrowUserException();
@@ -258,14 +318,11 @@ wstring access_token_to_iksm(string access_token_t, RetrieveTokenDlg* tokenDlg_t
 	return ret;
 }
 
-void kill_mitm(RetrieveTokenDlg* dlg_t) {
-	CloseHandle(dlg_t->mitm_handle); // we set up the job so that this kills all child processes
- 	dlg_t->mitm_started = false;
-}
+UINT TokenRetriever::token_listener(LPVOID pParam) { // checks if token file exists
+	// this listener expects MITM and emu to be running, waits for results
 
-UINT token_listener(LPVOID pParam) { // checks if token file exists
+	TokenRetriever* token_retriever = (TokenRetriever*)pParam;
 
-	RetrieveTokenDlg* tokenDlg = (RetrieveTokenDlg*)pParam;
 	while (true) {
 		if (boost::filesystem::exists("authorization.txt")) {
 			ifstream file("authorization.txt");
@@ -273,12 +330,14 @@ UINT token_listener(LPVOID pParam) { // checks if token file exists
 			file >> authorization_token;
 			file.close();
 			DeleteFile(L"authorization.txt");
-			tokenDlg->found_token = access_token_to_iksm(authorization_token, tokenDlg);
-			kill_mitm(tokenDlg);
-			tokenDlg->tokenEdit.SetWindowTextW(tokenDlg->found_token.c_str());
-			tokenDlg->tokenEdit.EnableWindow(TRUE);
-			tokenDlg->ok_btn.EnableWindow(TRUE);
-			
+			token_retriever->iksm_token = ws2s(token_retriever->access_token_to_iksm(authorization_token));
+			CloseHandle(token_retriever->mitm_handle);
+			CloseHandle(token_retriever->emu_handle);
+			//tokenDlg->tokenEdit.SetWindowTextW(tokenDlg->found_token.c_str());
+			//tokenDlg->tokenEdit.EnableWindow(TRUE);
+			if (token_retriever->ok_button)
+				(*(token_retriever->ok_button))->EnableWindow(TRUE);
+
 			break;
 		}
 	}
@@ -286,7 +345,7 @@ UINT token_listener(LPVOID pParam) { // checks if token file exists
 	return 0;
 }
 
-void log_manually(string message) {
+void TokenRetriever::log_manually(string message) {
 	ofstream file;
 	file.open("log.txt", ios_base::app);
 	file << message;

@@ -1,4 +1,7 @@
 def response(flow):
+    file = open("progress.txt","a")
+    file.write("\n");
+    file.close();
     if "nintendo.net/v1/Game/ListWebServices" in flow.request.url:
         file = open("authorization.txt","w")
         cookie = flow.request.headers['Authorization']
