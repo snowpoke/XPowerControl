@@ -7,6 +7,7 @@
 #include "settings.h"
 #include "wstring_transform.h"
 #include "nlohmann/json.hpp"
+#include "ActionRequiredDlg.h"
 #include <string>
 #include <filesystem>
 using namespace std;
@@ -33,6 +34,7 @@ void RetrievalProgressDlg::DoDataExchange(CDataExchange* pDX)
 
 
 BEGIN_MESSAGE_MAP(RetrievalProgressDlg, CDialogEx)
+	ON_WM_CLOSE()
 END_MESSAGE_MAP()
 
 
@@ -41,7 +43,7 @@ UINT progress_listener(LPVOID pParam) {
 
 	// at the start of the launching process, we use the number of lines in process.txt to indicate how far we are
 	int launching = true;
-
+	bool dlg_opened = false;
 	do {
 		// check the number of lines, update accordingly
 		if (launching) {
@@ -50,8 +52,19 @@ UINT progress_listener(LPVOID pParam) {
 			int line_num = 0;
 			while (getline(file, line))
 				line_num++;
-			dlg->progress.SetPos(min(line_num * 5,50)); // 5% per line, maximum 50%
+
+			if (dlg->require_login)
+				dlg->progress.SetPos(min(line_num * 5, 20)); // 5% per line, maximum 20%
+			else
+				dlg->progress.SetPos(min(line_num * 5,50)); // 5% per line, maximum 50%
+
+			if (line_num > 0 && dlg->require_login && !dlg_opened) {
+				ActionRequiredDlg("media/bluestacks_login_comp.png",
+					L"Please close the pop-up and log into the Nintendo Switch Online App, the program will then retrieve your token.");
+				dlg_opened = true;
+			}
 		}
+
 
 		if (dlg->progress.GetPos() != dlg->retriever.get_progress() && dlg->retriever.get_progress() != 0) {
 			dlg->progress.SetPos(dlg->retriever.get_progress());
@@ -61,12 +74,14 @@ UINT progress_listener(LPVOID pParam) {
 
 		Sleep(10);
 	} while (dlg->progress.GetPos() < 100);
+	dlg->progress.SetPos(dlg->retriever.get_progress());
 
 	dlg->GetDlgItem(IDC_STATIC_STATUS)->SetWindowTextW(L"Token has been retrieved successfully!");
-
+	auto val = WaitForSingleObject(dlg->token_listener_thread->m_hThread, 10000);
 	dlg->has_succeeded = true;
-	if (!dlg->no_closing_after_success)
+	if (!dlg->no_closing_after_success) {
 		dlg->SendMessage(WM_CLOSE);
+	}
 	return 0;
 }
 
@@ -100,6 +115,10 @@ UINT iksm_listener(LPVOID pParam) {
 BOOL RetrievalProgressDlg::OnInitDialog() {
 	CDialogEx::OnInitDialog();
 
+	HICON m_hIcon1 = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	SetIcon(m_hIcon1, TRUE);			// Set big icon
+	SetIcon(m_hIcon1, FALSE);		// Set small icon
+
 	// make sure the window is in the foreground, even after helper software is called
 	::SetForegroundWindow(this->GetSafeHwnd());
 	::SetWindowPos(this->GetSafeHwnd(),
@@ -110,6 +129,9 @@ BOOL RetrievalProgressDlg::OnInitDialog() {
 		0,
 		SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
 
+	if (require_login) {
+		GetDlgItem(IDC_STATIC_STATUS)->SetWindowTextW(L"Launching NSO App...\nPlease log in once the app has loaded.");
+	}
 	progress.SetRange(0, 100);
 	progress.SetPos(0);
 
@@ -118,7 +140,7 @@ BOOL RetrievalProgressDlg::OnInitDialog() {
 	string emu_cmd = read_from_settings<string>("emu_cmd");
 
 
-	retriever = TokenRetriever(GetDlgItem(IDC_STATIC_STATUS), {}, s2ws(mitm_exec), s2ws(emu_cmd));
+	retriever = TokenRetriever(GetDlgItem(IDC_STATIC_STATUS), {}, transform::s2ws(mitm_exec), transform::s2ws(emu_cmd));
 
 	retriever.mitm_start();
 	retriever.emu_start();
@@ -128,7 +150,7 @@ BOOL RetrievalProgressDlg::OnInitDialog() {
 		DeleteFile(L"progress.txt");
 
 	// token_listener waits until mitm and emu have loaded, then loads new iksm token and stores it
-	AfxBeginThread(retriever.token_listener, &retriever);
+	token_listener_thread = AfxBeginThread(retriever.token_listener, &retriever);
 
 	// progress_listener listens to progress_percent on the iksm retriever, updates progress bar accordingly
 	AfxBeginThread(progress_listener, this);
@@ -137,4 +159,14 @@ BOOL RetrievalProgressDlg::OnInitDialog() {
 	AfxBeginThread(iksm_listener, this);
 
 	return TRUE;
+}
+
+
+// we have to kill the retriever thread when closing the window
+void RetrievalProgressDlg::OnClose()
+{
+	retriever.kill_token_listener = true;
+	WaitForSingleObject(token_listener_thread->m_hThread, 5000);
+	retriever.kill_token_listener = false;
+	CDialogEx::OnClose();
 }

@@ -2,6 +2,8 @@
 #include "resource.h"
 #include <afxdialogex.h>
 #include <iostream>
+#include <vector>
+#include <array>
 #define MSG_UPDATE_DL_PROGRESS 1
 #define MSG_STOP_LISTENER 2
 #define MSG_NONE 99
@@ -14,6 +16,7 @@ public:
 	unsigned long progress = 0;
 	unsigned long max_dl = 0;
 	unsigned long status_code = 0;
+	bool finished = false;
 	FirstSetupDlg2* dlg;
 
 	Callback() : dlg(nullptr) {}
@@ -71,6 +74,15 @@ public:
 	ULONG Release() { return 0; }
 };
 
+struct DownloadParam {
+	wchar_t* dl_URL;
+	std::wstring savepath_t;
+	Callback* callback_t;
+};
+
+typedef unsigned char byte_t;
+void write_binary_buffer(std::wstring path_t, std::vector<byte_t> buffer_t);
+
 // FirstSetupDlg2 dialog
 
 class FirstSetupDlg2 : public CDialogEx
@@ -80,13 +92,17 @@ class FirstSetupDlg2 : public CDialogEx
 public:
 	FirstSetupDlg2(bool needs_nox_t, bool needs_mitm_t, CWnd* pParent = nullptr);   // standard constructor
 	virtual ~FirstSetupDlg2();
-	bool needs_nox;
+	bool needs_bs;
 	bool needs_mitm;
 	virtual BOOL OnInitDialog();
 	static UINT message_listener(LPVOID pParam);
 	void on_update_dl_progress();
 	void send_message(UINT message_t) { message = message_t; }
-	Callback nox_callback, mitm_callback, vmachine_callback, nso_callback;
+	Callback bs_callback, mitm_callback, nso_callback;
+	std::array<Callback,4> vmachine_callback;
+	std::array<DownloadParam,4> vmachine_dl_param;
+	std::wstring vmachine_dl_url;
+	CWinThread* winthread_message_listener;
 // Dialog Data
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_FIRSTSETUP2 };
@@ -94,10 +110,11 @@ public:
 
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
-
 	DECLARE_MESSAGE_MAP()
 private:
 	UINT message = MSG_NONE;
 public:
 	CProgressCtrl progress_dl;
+	afx_msg void OnBnClickedOk();
+	afx_msg void OnBnClickedCancel();
 };

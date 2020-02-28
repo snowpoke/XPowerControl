@@ -29,6 +29,10 @@ RetrieveTokenDlg::~RetrieveTokenDlg()
 BOOL RetrieveTokenDlg::OnInitDialog() {
 	CDialogEx::OnInitDialog();
 
+	HICON m_hIcon1 = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	SetIcon(m_hIcon1, TRUE);			// Set big icon
+	SetIcon(m_hIcon1, FALSE);		// Set small icon
+
 	tokenEdit.SetWindowTextW(L"> Follow Step 1 to start process <");
 
 	return 1;

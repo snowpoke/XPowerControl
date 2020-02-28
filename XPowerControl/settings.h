@@ -5,7 +5,7 @@
 #include "nlohmann/json.hpp"
 #include "wstring_transform.h"
 #include <optional>
-#define CURRENT_SETTING_VERSION 3
+#define CURRENT_SETTING_VERSION 4
 
 bool settings_exist(std::string key_t); // checks if a certain key exists in the settings file
 
@@ -21,7 +21,7 @@ T read_from_settings(std::string key_t) {
 	}
 	catch (...) {
 		std::cout << "Failed to read item '" << key_t << "' from settings file.";
-		MessageBox(NULL, (LPCWSTR)((L"Failed to read item '" + s2ws(key_t) + L"' from settings file.").c_str()),
+		MessageBox(NULL, (LPCWSTR)((L"Failed to read item '" + transform::s2ws(key_t) + L"' from settings file.").c_str()),
 			(LPCWSTR)L"File error", MB_OK);
 
 		return T();

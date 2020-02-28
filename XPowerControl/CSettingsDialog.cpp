@@ -45,7 +45,6 @@ void CSettingsDialog::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_BUTTON2, button_filedir);
 	DDX_Control(pDX, IDC_BUTTON5, button_startcmd);
 	DDX_Control(pDX, IDC_BUTTON6, button_endcmd);
-	DDX_Control(pDX, IDC_BUTTON_IKSM_FAILSCREEN, button_iksmfail);
 	DDX_Control(pDX, IDC_DOHIDEPOWER, check_hidepower);
 	DDX_Control(pDX, IDC_EDIT_MAXPRECISE, edit_maxprecise);
 	DDX_Control(pDX, IDC_EDIT_NOX, edit_nox);
@@ -65,7 +64,6 @@ BEGIN_MESSAGE_MAP(CSettingsDialog, CDialogEx)
 	ON_BN_CLICKED(IDC_CHECK_SAVEMATCHDATA, &CSettingsDialog::OnBnClickedCheckSavematchdata)
 	ON_BN_CLICKED(IDC_CHECK_RUNSTARTCMD, &CSettingsDialog::OnBnClickedCheckRunstartcmd)
 	ON_BN_CLICKED(IDC_CHECK_RUNENDCMD, &CSettingsDialog::OnBnClickedCheckRunendcmd)
-	ON_BN_CLICKED(IDC_BUTTON_IKSM_FAILSCREEN, &CSettingsDialog::OnBnClickedButtonIksmFailscreen)
 	ON_BN_CLICKED(IDC_BUTTON_RETRIEVETOKEN, &CSettingsDialog::OnBnClickedButtonRetrievetoken)
 	ON_STN_CLICKED(IDC_STATIC_RETRIEVAL_SETUP, &CSettingsDialog::OnStnClickedStaticRetrievalSetup)
 	ON_BN_CLICKED(IDC_DOHIDEPOWER, &CSettingsDialog::OnBnClickedDohidepower)
@@ -117,15 +115,15 @@ void enable_by_checkbox(CDialog* dialog_t, CButton& checkbox_t, int element_id_t
 void CSettingsDialog::refresh_settings(UINT limit_performance /*=ST_ALL*/) {
 	// fill elements with settings
 	if (limit_performance == ST_ALL || limit_performance == ST_AUTHONLY) {
-		edit_iksm.SetWindowTextW(s2ws(read_from_settings<string>("iksm-session")).c_str());
-		edit_mitm.SetWindowTextW(s2ws(read_from_settings<string>("mitm_exec")).c_str());
-		edit_nox.SetWindowTextW(s2ws(read_from_settings<string>("emu_exec")).c_str());
-		edit_emu.SetWindowTextW(s2ws(read_from_settings<string>("emu_cmd")).c_str());
+		edit_iksm.SetWindowTextW(transform::s2ws(read_from_settings<string>("iksm-session")).c_str());
+		edit_mitm.SetWindowTextW(transform::s2ws(read_from_settings<string>("mitm_exec")).c_str());
+		edit_nox.SetWindowTextW(transform::s2ws(read_from_settings<string>("emu_exec")).c_str());
+		edit_emu.SetWindowTextW(transform::s2ws(read_from_settings<string>("emu_cmd")).c_str());
 	}
 	if (limit_performance == ST_ALL) {
-		edit_datadir.SetWindowTextW(s2ws(read_from_settings<string>("matchdata_directory")).c_str());
-		edit_startcmd.SetWindowTextW(s2ws(read_from_settings<string>("start_cmd")).c_str());
-		edit_endcmd.SetWindowTextW(s2ws(read_from_settings<string>("end_cmd")).c_str());
+		edit_datadir.SetWindowTextW(transform::s2ws(read_from_settings<string>("matchdata_directory")).c_str());
+		edit_startcmd.SetWindowTextW(transform::s2ws(read_from_settings<string>("start_cmd")).c_str());
+		edit_endcmd.SetWindowTextW(transform::s2ws(read_from_settings<string>("end_cmd")).c_str());
 		edit_maxprecise.SetWindowTextW(to_wstring(read_from_settings<int>("max_precise")).c_str());
 		check_savematchdata.SetCheck(read_from_settings<bool>("do_savematchdata"));
 		check_runstartcmd.SetCheck(read_from_settings<bool>("do_startcmd"));
@@ -156,16 +154,16 @@ BOOL CSettingsDialog::OnInitDialog()
 
 	refresh_settings();
 
-	// underline retrieval setup link
-	CFont* font_dlg = GetDlgItem(IDC_STATIC_RETRIEVAL_SETUP)->GetFont();
-	LOGFONT logfont_underline;
+	// underline retrieval setup link (link is removed at the moment, might not need it)
+	//CFont* font_dlg = GetDlgItem(IDC_STATIC_RETRIEVAL_SETUP)->GetFont();
+	//LOGFONT logfont_underline;
 
-	font_dlg->GetLogFont(&logfont_underline);
-	logfont_underline.lfUnderline = true;
-	CFont* font_underline = new CFont();
-	font_underline->CreateFontIndirectW(&logfont_underline);
+	//font_dlg->GetLogFont(&logfont_underline);
+	//logfont_underline.lfUnderline = true;
+	//CFont* font_underline = new CFont();
+	//font_underline->CreateFontIndirectW(&logfont_underline);
 
-	GetDlgItem(IDC_STATIC_RETRIEVAL_SETUP)->SetFont(font_underline);
+	//GetDlgItem(IDC_STATIC_RETRIEVAL_SETUP)->SetFont(font_underline);
 
 	// create cursors for retrieval setup link
 	cursor_hand = LoadCursor(NULL, IDC_HAND);
@@ -443,7 +441,8 @@ void CSettingsDialog::OnBnClickedButton7()
 void CSettingsDialog::OnNcDestroy()
 {
 	kill_message_listener = true;
-	DWORD main_response = WaitForSingleObject(handle_message_listener, 5000);
+	DWORD main_response = WaitForSingleObject(handle_message_listener->m_hThread, 5000);
+	kill_message_listener = false;
 	CDialogEx::OnNcDestroy();
 }
 

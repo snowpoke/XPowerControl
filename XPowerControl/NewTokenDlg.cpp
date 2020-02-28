@@ -58,6 +58,10 @@ END_MESSAGE_MAP()
 BOOL NewTokenDlg::OnInitDialog() {
 	CDialogEx::OnInitDialog();
 
+	HICON m_hIcon1 = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	SetIcon(m_hIcon1, TRUE);			// Set big icon
+	SetIcon(m_hIcon1, FALSE);		// Set small icon
+
 	// Initialize GDI+
 	Gdiplus::GdiplusStartupInput gdiplusStartupInput;
 	Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);

@@ -12,6 +12,9 @@
 #define IDD_RETRIEVE_PROGRESS           143
 #define IDD_FIRSTSETUP                  145
 #define IDD_FIRSTSETUP2                 147
+#define IDD_FIRSTSETUP3                 149
+#define IDD_FIRSTSETUP4                 151
+#define IDD_ACTION_REQUIRED             153
 #define IDC_WINTEXT                     1005
 #define IDC_WINVALUE                    1007
 #define IDC_LOSEVALUE                   1008
@@ -74,15 +77,26 @@
 #define IDC_STATIC_NOX_PROGRESS         1071
 #define IDC_STATIC_MITM_PROGRESS        1072
 #define IDC_STATIC_VMACHINE_PROGRESS    1073
-#define IDC_STATIC_NSO_PROGRESS         1074
+#define IDC_BUTTON_INSTALL_NOX          1075
+#define IDC_BUTTON_INSTALL_MITM         1076
+#define IDC_STATIC_NOX                  1077
+#define IDC_STATIC_MITM                 1078
+#define IDC_STATIC_RESPONSE             1080
+#define IDC_STATIC_UPDATE               1081
+#define IDC_STATIC_NSO_PROGRESS         1082
+#define IDC_STATIC_INSUFFICIENT_STORAGE 1083
+#define IDC_STATIC_UPDATE2              1084
+#define IDC_STATIC_PICTURE              1085
+#define IDC_STATIC_DESCRIPTION          1086
+#define IDC_STATIC_SCREENSHOT           1087
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        149
+#define _APS_NEXT_RESOURCE_VALUE        155
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1075
+#define _APS_NEXT_CONTROL_VALUE         1088
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

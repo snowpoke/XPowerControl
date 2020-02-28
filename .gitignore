@@ -261,3 +261,7 @@ __pycache__/
 *.pyc
 /XPowerControl/snes9x-x64.exe
 /XPowerControl/snes9x.conf
+/XPowerControl/archive.7z
+/XPowerControl/archive.7z.001
+/XPowerControl/installer_mitmproxy.exe
+/XPowerControl/installer_nox.exe

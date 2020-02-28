@@ -2,6 +2,7 @@
 #include "resource.h"
 #include <afxdialogex.h>
 #include <optional>
+#include "Version.h"
 
 // FirstSetupDlg dialog
 
@@ -23,7 +24,14 @@ protected:
 	virtual BOOL OnInitDialog();
 	DECLARE_MESSAGE_MAP()
 public:
+	Version this_ver, latest_ver;
 	afx_msg void OnBnClickedOk();
 	bool needs_mitm = true;
-	bool needs_nox = true;
+	bool needs_bs = true;
+	afx_msg void OnBnClickedCancel();
+	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
+	bool kill_update_info = false;
+	CWinThread* update_info_monitor;
+	afx_msg void OnStnClickedStaticInsufficientStorage();
+	afx_msg void OnBnClickedButton1();
 };

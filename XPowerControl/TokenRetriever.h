@@ -21,7 +21,7 @@ public:
 
 	TokenRetriever() : status_element({}), ok_button({}), mitm_exec(L""), emu_command(L"") {}
 
-	HANDLE run_command(std::wstring command_t);
+	static HANDLE run_command(std::wstring command_t);
 	void mitm_start();
 	void emu_start();
 	std::wstring access_token_to_iksm(std::string access_token_t);
@@ -29,6 +29,7 @@ public:
 	std::optional<std::string> get_iksm_token() { return iksm_token; }
 	int get_progress() {return progress_percent;}
 	void set_progress(int n) { progress_percent = n; }
+	bool kill_token_listener = false;
 private:
 	static int writer(char* data, size_t size, size_t nmemb,
 		std::string* writerData);

@@ -225,7 +225,11 @@ void save_info(float power_t, optional<float> win_trunc_t, optional<float> lose_
 		if ((*win_dist_t + *lose_dist_t < 10) || (*win_dist_t > 100) || (limit_spread && *win_dist_t + *lose_dist_t > max_spread)) {
 			dist_formatter_detailed%* win_dist_t;
 			win_dist_string = "+??";
-			win_detail_string = "Calibrating [+" + dist_formatter_detailed.str() + "]";
+			string win_detailed = dist_formatter_detailed.str();
+			if (*win_dist_t >= 0)
+				win_detail_string = "Calibrating [+" + win_detailed + "]";
+			else
+				win_detail_string = "Calibrating";
 		}
 		else {
 			win_trunc_t = max(0, win_trunc_t); // makes sure that win_trunc_t is not a negative number
@@ -265,11 +269,11 @@ void save_info(string power_t, string win_t, string lose_t, string win_detail_t,
 		file.close();
 	}
 
-	window_t->GetDlgItem(IDC_WINVALUE)->SetWindowTextW(s2ws(win_t).c_str());
-	window_t->GetDlgItem(IDC_LOSEVALUE)->SetWindowTextW(s2ws(lose_t).c_str());
-	window_t->GetDlgItem(IDC_POWERVALUE)->SetWindowTextW(s2ws(power_t).c_str());
-	window_t->GetDlgItem(IDC_WINDETAILS)->SetWindowTextW(s2ws(win_detail_t).c_str());
-	window_t->GetDlgItem(IDC_LOSEDETAILS)->SetWindowTextW(s2ws(lose_detail_t).c_str());
+	window_t->GetDlgItem(IDC_WINVALUE)->SetWindowTextW(transform::s2ws(win_t).c_str());
+	window_t->GetDlgItem(IDC_LOSEVALUE)->SetWindowTextW(transform::s2ws(lose_t).c_str());
+	window_t->GetDlgItem(IDC_POWERVALUE)->SetWindowTextW(transform::s2ws(power_t).c_str());
+	window_t->GetDlgItem(IDC_WINDETAILS)->SetWindowTextW(transform::s2ws(win_detail_t).c_str());
+	window_t->GetDlgItem(IDC_LOSEDETAILS)->SetWindowTextW(transform::s2ws(lose_detail_t).c_str());
 	
 
 	if (window_t->match_running)
@@ -305,7 +309,7 @@ void run_script_matchstart() {
 		string start_script = read_from_settings<string>("start_cmd");
 		if (start_script != "") {
 			CreateProcess(NULL,
-				const_cast<LPWSTR>(s2ws(start_script).c_str()),
+				const_cast<LPWSTR>(transform::s2ws(start_script).c_str()),
 				NULL,
 				NULL,
 				FALSE,
@@ -333,7 +337,7 @@ void run_script_matchend() {
 		string end_script = read_from_settings<string>("end_cmd");
 		if (end_script != "") {
 			CreateProcess(NULL,
-				const_cast<LPWSTR>(s2ws(end_script).c_str()),
+				const_cast<LPWSTR>(transform::s2ws(end_script).c_str()),
 				NULL,
 				NULL,
 				FALSE,

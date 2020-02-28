@@ -1,1 +1,1 @@
-{"parameter":{"registrationToken":"f0LvvpbXHWs:APA91bEJhqHEQzzBFxtT0y4BRTSLkqh2PtupUaH3z6Zlik7PXAZwYwcU9WwCrBsZIVuNskSl8gnjtQdqBwynFJCv5PWs1uBMrcK7bu7mn28G9DmN3idMJ5HlulBeuzDFmJxUnTUNUq4z"}}
+{"parameter":{"registrationToken":"cSNJhRDf74o:APA91bFVGQ3zyFqC2jeWFVbBMidsodpc9R6ATH6lR2q3SIGI1YX_4J8XQ5-pDzt2zQjNEdkebiiUq6WJbKe79I20ZMLgD2XJhwsixEXec872IOiSavPsWq77XetEdCeLwrDTNAhojt1W"}}

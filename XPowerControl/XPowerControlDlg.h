@@ -5,6 +5,7 @@
 #pragma once
 #include <string>
 #include "Analytics.h"
+#include "Version.h"
 
 // CXPowerControlDlg dialog
 class CXPowerControlDlg : public CDialogEx
@@ -57,4 +58,8 @@ public:
 	CButton m_buttonSettings;
 	ULONG_PTR gdiplusToken; // required for GDI+
 	CStatic staticbtn_settings;
+	afx_msg void OnWindowPosChanged(WINDOWPOS* lpwndpos);
+	Version this_ver;
+	Version latest_ver;
+	void refresh_static_text(int item_t, std::wstring text_t);
 };

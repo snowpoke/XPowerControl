@@ -16,6 +16,7 @@ public:
 	virtual ~RetrievalProgressDlg();
 	virtual BOOL OnInitDialog();
 	bool no_closing_after_success; // if this is set to true, the dialog will not close on its own after finishing
+	bool require_login = false;
 	bool has_succeeded = false; // is true when iksm token is retrieved and saved
 	CProgressCtrl progress;
 	TokenRetriever retriever;
@@ -32,4 +33,6 @@ protected:
 	
 public:
 	CEdit edit_test;
+	CWinThread* token_listener_thread;
+	afx_msg void OnClose();
 };

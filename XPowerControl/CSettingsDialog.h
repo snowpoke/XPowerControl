@@ -68,7 +68,7 @@ public:
 	CButton check_hidepower;
 	CEdit edit_maxprecise;
 	afx_msg void OnBnClickedDohidepower();
-	HANDLE handle_message_listener;
+	CWinThread* handle_message_listener;
 	afx_msg void OnBnClickedButton7();
 	CEdit edit_nox;
 	void save_settings(UINT limit_performance = ST_ALL);

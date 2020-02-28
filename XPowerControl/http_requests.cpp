@@ -49,7 +49,7 @@ string http_requests::load_page(const string& link_t, const string& SESSID_t) {
 	}
 	/* Check for errors */
 	if (res != CURLE_OK) {
-		AfxMessageBox((L"Failed to load information from URL " + s2ws(link_t)).c_str());
+		AfxMessageBox((L"Failed to load information from URL " + transform::s2ws(link_t)).c_str());
 		AfxThrowUserException();
 	}
 	return ret;

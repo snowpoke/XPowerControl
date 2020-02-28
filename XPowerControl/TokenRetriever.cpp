@@ -4,6 +4,7 @@
 #include "token_retrieve.h"
 #include "nlohmann/json.hpp"
 #include "wstring_transform.h"
+#include "FirstSetup.h"
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
 #include <fstream>
@@ -154,7 +155,7 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 		registration_token = j["parameter"]["registrationToken"].get<string>();
 	}
 	catch (const exception & e) {
-		AfxMessageBox((L"Failed retrieving the registration token. Please try again or retrieve the token manually. " + s2ws(e.what())).c_str());
+		AfxMessageBox((L"Failed retrieving the registration token. Please try again or retrieve the token manually. " + transform::s2ws(e.what())).c_str());
 		AfxThrowUserException();
 	}
 
@@ -217,7 +218,7 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 			}
 			catch (const exception& e) {
 				wstring afx_message = L"Failed to read the token from file. (Attempt " + to_wstring(attempt_num - 1) + L"/3)";
-				afx_message += s2ws(e.what());
+				afx_message += transform::s2ws(e.what());
 				AfxMessageBox(afx_message.c_str());
 				continue;
 			}
@@ -323,16 +324,39 @@ UINT TokenRetriever::token_listener(LPVOID pParam) { // checks if token file exi
 
 	TokenRetriever* token_retriever = (TokenRetriever*)pParam;
 
-	while (true) {
+	while (!token_retriever->kill_token_listener) {
 		if (boost::filesystem::exists("authorization.txt")) {
 			ifstream file("authorization.txt");
 			string authorization_token;
 			file >> authorization_token;
 			file.close();
+			if (authorization_token == "")
+				continue;
 			DeleteFile(L"authorization.txt");
-			token_retriever->iksm_token = ws2s(token_retriever->access_token_to_iksm(authorization_token));
+			token_retriever->iksm_token = transform::ws2s(token_retriever->access_token_to_iksm(authorization_token));
+			Sleep(1000); //TODO: We only actually need to wait here during the first setup (and maybe not at all)
 			CloseHandle(token_retriever->mitm_handle);
-			CloseHandle(token_retriever->emu_handle);
+			//CloseHandle(token_retriever->emu_handle);
+
+			if (token_retriever->status_element)
+				token_retriever->status_element.value()->SetWindowTextW(L"Sending close signal...");
+
+			// NOTE: Using the same code here as in bs_setup() - turning this into its own function might be worthwhile
+			CRegKey registry;
+			ULONG sz_installdir = MAX_PATH;
+			CString cstr_installdir = CString();
+
+			// Computer\HKEY_LOCAL_MACHINE\SOFTWARE\BlueStacks has info we need in InstallDir
+			registry.Open(HKEY_LOCAL_MACHINE, L"SOFTWARE\\BlueStacks", KEY_READ);
+			registry.QueryStringValue(L"InstallDir", cstr_installdir.GetBuffer(sz_installdir), &sz_installdir);
+			wstring installdir = wstring(cstr_installdir);
+
+			// we run HD-Quit.exe to quit bluestacks
+			HANDLE quit_handle = TokenRetriever::run_command(installdir + L"HD-Quit.exe");
+			HANDLE bs_process_handle = FirstSetup::job_to_process_handle(token_retriever->emu_handle);
+
+			WaitForSingleObject(bs_process_handle, INFINITE);
+
 			//tokenDlg->tokenEdit.SetWindowTextW(tokenDlg->found_token.c_str());
 			//tokenDlg->tokenEdit.EnableWindow(TRUE);
 			if (token_retriever->ok_button)
@@ -340,6 +364,7 @@ UINT TokenRetriever::token_listener(LPVOID pParam) { // checks if token file exi
 
 			break;
 		}
+		Sleep(50);
 	}
 
 	return 0;

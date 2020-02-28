@@ -15,12 +15,24 @@
 #include "NewTokenDlg.h"
 #include "analytics.h"
 #include "FirstSetupDlg.h"
+#include "Version.h"
+#include "http_requests.h"
 #include <filesystem>
+#include <boost/algorithm/string.hpp>
+
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
 
+
+/* TODO:
+- Scaling issues when scaling is set to above 100%
+- MITM installation is exited a bit early, sometimes the uninstaller doesn't get installed properly
+- Program window opens when closing "Action needed" popup
+- When there's an update pending, the pressing Next on the First Setup Dlg has a little delay
+- proxy installation unreliable
+*/
 
 // CXPowerControlDlg dialog
 
@@ -51,20 +63,17 @@ ON_WM_CLOSE()
 ON_STN_CLICKED(IDC_BATTLE_START_TEXT, &CXPowerControlDlg::OnStnClickedBattleStartText)
 ON_STN_CLICKED(IDC_LOSEDETAILS, &CXPowerControlDlg::OnStnClickedLosedetails)
 ON_STN_CLICKED(IDC_STATICBTN_SETTINGS, &CXPowerControlDlg::OnStnClickedSettings)
+ON_WM_WINDOWPOSCHANGED()
 END_MESSAGE_MAP()
 
-
 bool CXPowerControlDlg::start_monitoring() {
+	cout << "Sending signal to start monitoring.\n";
 	// run game monitor
 	string SESSID = read_from_settings<string>("iksm-session");
+
 	if (SESSID == "") {
-		//AfxMessageBox(_T("No value for iksm_session was found. "
-		//	"If this is your first time running this program, please read the README.txt file."));
-		//NewTokenDlg dlg(INFO_NOIKSM);
-		//dlg.DoModal();
-		FirstSetupDlg dlg;
+		NewTokenDlg dlg(INFO_NOIKSM);
 		dlg.DoModal();
-		start_monitoring();
 	}
 	else {
 
@@ -79,6 +88,7 @@ bool CXPowerControlDlg::start_monitoring() {
 
 		thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
 		thread_monitor_main = AfxBeginThread(monitor_main_alt, this);
+		cout << "Started montioring\n";
 		return TRUE;  // return TRUE  unless you set the focus to a control
 	}
 }
@@ -86,13 +96,42 @@ bool CXPowerControlDlg::start_monitoring() {
 
 
 void  CXPowerControlDlg::stop_monitoring() {
+	cout << "Sending signal to stop monitoring.\n";
 	kill_monitor_main = true;
 	kill_rotation_monitor = true;
-	DWORD main_response = WaitForSingleObject(thread_monitor_main, 5000);
-	DWORD rotation_response = WaitForSingleObject(thread_rotation_monitor, 5000);
+	DWORD main_response = WaitForSingleObject(thread_monitor_main->m_hThread, 5000);
+	DWORD rotation_response = WaitForSingleObject(thread_rotation_monitor->m_hThread, 5000);
+	cout << "Stopped monitoring\n";
+	kill_monitor_main = false;
+	kill_rotation_monitor = false;
 }
 
 // CXPowerControlDlg message handlers
+
+UINT thread_update_info(LPVOID pParam) {
+	CXPowerControlDlg* dlg = (CXPowerControlDlg*)pParam;
+
+	dlg->GetDlgItem(IDC_STATIC_UPDATE)->ShowWindow(SW_SHOW);
+	for (int i = 0; i < 2; ++i) {
+		dlg->GetDlgItem(IDC_STATIC_UPDATE)->SetWindowText(L"Update Available!");
+		dlg->Invalidate();
+		dlg->UpdateWindow();
+		Sleep(1500);
+		dlg->GetDlgItem(IDC_STATIC_UPDATE)->SetWindowText((L"Your version: " + dlg->this_ver.to_wstring(3)).c_str());
+		dlg->Invalidate();
+		dlg->UpdateWindow();
+		Sleep(1500);
+		dlg->GetDlgItem(IDC_STATIC_UPDATE)->SetWindowText((L"Latest version: " + dlg->latest_ver.to_wstring(3)).c_str());
+		dlg->Invalidate();
+		dlg->UpdateWindow();
+		Sleep(1500);
+	}
+	dlg->GetDlgItem(IDC_STATIC_UPDATE)->ShowWindow(SW_HIDE);
+
+	return 0;
+}
+
+
 
 BOOL CXPowerControlDlg::OnInitDialog()
 {
@@ -107,9 +146,11 @@ BOOL CXPowerControlDlg::OnInitDialog()
 	// Initialize GDI+
 	Gdiplus::GdiplusStartupInput gdiplusStartupInput;
 	Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+	RECT rect_client;
+	GetClientRect(&rect_client);
 	staticbtn_settings.Create(_T(""),
 		WS_CHILD | WS_VISIBLE | SS_ICON | SS_CENTERIMAGE | SS_NOTIFY | SS_REALSIZEIMAGE,
-		CRect(247, 113, 272, 138), this, IDC_STATICBTN_SETTINGS);
+		CRect(rect_client.right-25, rect_client.bottom-25, rect_client.right, rect_client.bottom), this, IDC_STATICBTN_SETTINGS);
 
 	// TODO: Add extra initialization here
 	CFont *powerFont = new CFont();
@@ -187,6 +228,7 @@ BOOL CXPowerControlDlg::OnInitDialog()
 	GetDlgItem(IDC_LOSETEXT)->SetFont(font_bold);
 	GetDlgItem(IDC_LOADING)->SetFont(font_default);
 	GetDlgItem(IDC_BATTLE_START_TEXT)->SetFont(font_default);
+	GetDlgItem(IDC_STATIC_UPDATE)->SetFont(font_default);
 
 #ifdef DEBUG
 	AllocConsole();
@@ -194,12 +236,32 @@ BOOL CXPowerControlDlg::OnInitDialog()
 	std::cout << "This is the debugging window. If you're not the developer of this software and you can see this, please contact the developer and tell her that she's a dumb dumb.";
 #endif
 
+	// check if version is up to date
+	TCHAR exec_filename[MAX_PATH];
+	GetModuleFileName(NULL, exec_filename, MAX_PATH);
+	this_ver = Version::from_file(exec_filename);
+
+	string version_page = http_requests::load_page("https://raw.githubusercontent.com/snowpoke/XPowerControl-public/master/version.json","");
+	boost::erase_all(version_page, "\n");
+	auto j_version = nlohmann::json::parse(version_page);
+	latest_ver = Version::from_string(j_version["latest_version"]);
+
+	if (this_ver < latest_ver) {
+		AfxBeginThread(thread_update_info, this);
+	}
+
+#ifdef DEBUG
+	SetWindowText((L"woomyDX v" + this_ver.to_wstring(3) + L"dev").c_str());
+#else
+	SetWindowText((L"woomyDX v" + this_ver.to_wstring(3) + L" [sub-only]").c_str());
+#endif
+	
 
 	// check validity of the settings
 
 	// See if settings.txt exists
 	if (!filesystem::exists("settings.txt")) {
-		AfxMessageBox(_T("No settings file has been found. A new file will be created, but there might be an error in your woomyDX installation."));
+		AfxMessageBox(_T("Before you can run this program, you have to set up external software to retrieve an access token. Press OK to start the setup wizard."));
 		ofstream out_file("settings.txt");
 		out_file << "{}";
 		out_file.close();
@@ -231,12 +293,12 @@ BOOL CXPowerControlDlg::OnInitDialog()
 
 	if (!is_current_version) { // if the version is not up to date, we transfer the data
 
-		j["settings_version"] = 3;
+		j["settings_version"] = 4;
 		j["iksm-session"] = read_from_settings<string>("iksm_session","");
 		j["mitm_exec"] = read_from_settings<string>("mitm_exec", "");
 		j["emu_exec"] = read_from_settings<string>("emu_exec", "");
 		j["emu_cmd"] = read_from_settings<string>("emu_cmd", "");
-		j["matchdata_directory"] = read_from_settings<string>("matchdata_directory", "");
+		j["matchdata_directory"] = read_from_settings<string>("matchdata_directory", "./live_output/");
 		j["start_cmd"] = read_from_settings<string>("start_cmd", "");
 		j["end_cmd"] = read_from_settings<string>("end_cmd", "");
 		j["max_precise"] = read_from_settings<int>("max_precise", 40);
@@ -245,16 +307,38 @@ BOOL CXPowerControlDlg::OnInitDialog()
 		j["do_endcmd"] = read_from_settings<bool>("do_endcmd", false);
 		j["do_hidepower"] = read_from_settings<bool>("do_hidepower", true);
 		j["do_ontop"] = read_from_settings<bool>("do_ontop", true);
+		j["performed_setup"] = read_from_settings<bool>("performed_setup", false);
 
 		ofstream out_file("settings.txt");
 		out_file << j;
 		out_file.close();
 	}
 
-	// sets the window to be always on top
+	// make sure that directory in matchdata_directory actually exists
+	string matchdata_dir = read_from_settings<string>("matchdata_directory");
+	auto dir_status = filesystem::status(matchdata_dir);
+	if (!filesystem::exists(matchdata_dir)) {
+		bool create_success = filesystem::create_directory(matchdata_dir);
+		if (!create_success) {
+			wstring message = L"The program tried to create a folder for your intended stream file directory" + transform::s2ws(matchdata_dir)\
+				+ L"\nbut failed to do so.\nThis program will run regardless, but stream files will not be created.";
+			MessageBox(message.c_str(), L"Stream file error", MB_OK | MB_ICONWARNING);
+		}
+	}
+	else if (!filesystem::is_directory(matchdata_dir)) {
+		wstring message = L"The intended directory for you stream output files \"" + transform::s2ws(matchdata_dir) + L"\" was found, but it seems to be a file, not a directory.\n\
+This program will run regardless, but stream files will not be created.";
+		MessageBox(message.c_str(), L"Stream file error", MB_OK | MB_ICONWARNING);
+	}
+
+	if (!read_from_settings<bool>("performed_setup")) {
+		FirstSetupDlg dlg;
+		dlg.DoModal();
+	}
+
+
 	if (read_from_settings<bool>("do_ontop"))
 		SetWindowPos(&this->wndTopMost, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-
 	start_monitoring();
 
 	return true;
@@ -342,6 +426,9 @@ HBRUSH CXPowerControlDlg::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 			DrawIconEx(*pDC, 0, 0, settings_icon,25,25,0,NULL, DI_NORMAL | DI_COMPAT);
 			DestroyIcon(settings_icon);
 		}
+		if (pWnd->GetDlgCtrlID() == IDC_STATIC_UPDATE) {
+			pDC->SetTextColor(RGB(255, 0, 0));
+		}
 		pDC->SetBkMode(TRANSPARENT);
 		return (HBRUSH)GetStockObject(NULL_BRUSH);
 	default:
@@ -398,4 +485,21 @@ void CXPowerControlDlg::OnStnClickedSettings() {
 	settings_dlg.DoModal();
 	stop_monitoring();
 	start_monitoring();
+}
+
+
+void CXPowerControlDlg::OnWindowPosChanged(WINDOWPOS* lpwndpos)
+{
+	CDialogEx::OnWindowPosChanged(lpwndpos);
+	if (IsWindowVisible() == true && read_from_settings<bool>("do_ontop"))
+		SetWindowPos(&this->wndTopMost, 0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOSIZE | SWP_NOMOVE);
+}
+
+void CXPowerControlDlg::refresh_static_text(int item_t, std::wstring text_t) // WARNING: This doesn't work
+{
+	GetDlgItem(item_t)->SetWindowTextW(text_t.c_str());
+	CRect client_rect;
+	GetDlgItem(item_t)->GetClientRect(&client_rect);
+	InvalidateRect(client_rect, true);
+	UpdateWindow();
 }

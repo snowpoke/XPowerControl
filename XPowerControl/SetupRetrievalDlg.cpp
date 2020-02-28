@@ -54,6 +54,10 @@ BOOL SetupRetrievalDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
 
+	HICON m_hIcon1 = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	SetIcon(m_hIcon1, TRUE);			// Set big icon
+	SetIcon(m_hIcon1, FALSE);		// Set small icon
+
 	// underline testrun link
 	CFont* font_dlg = GetDlgItem(IDC_STATIC_TESTRUN)->GetFont();
 	LOGFONT logfont_underline;
@@ -70,9 +74,9 @@ BOOL SetupRetrievalDlg::OnInitDialog()
 	cursor_arrow = LoadCursor(NULL, IDC_ARROW);
 
 	// fill elements with settings
-	edit_mitm.SetWindowTextW(s2ws(read_from_settings<string>("mitm_exec")).c_str());
-	edit_emu.SetWindowTextW(s2ws(read_from_settings<string>("emu_exec")).c_str());
-	edit_emucmd.SetWindowTextW(s2ws(read_from_settings<string>("emu_cmd")).c_str());
+	edit_mitm.SetWindowTextW(transform::s2ws(read_from_settings<string>("mitm_exec")).c_str());
+	edit_emu.SetWindowTextW(transform::s2ws(read_from_settings<string>("emu_exec")).c_str());
+	edit_emucmd.SetWindowTextW(transform::s2ws(read_from_settings<string>("emu_cmd")).c_str());
 
 	return TRUE;
 }
