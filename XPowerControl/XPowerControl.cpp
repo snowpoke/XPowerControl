@@ -6,6 +6,7 @@
 #include "XPowerControl.h"
 #include "XPowerControlDlg.h"
 #include "RetrieveTokenDlg.h"
+#include "logging.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -71,6 +72,10 @@ BOOL CXPowerControlApp::InitInstance()
 	// TODO: You should modify this string to be something appropriate
 	// such as the name of your company or organization
 	SetRegistryKey(_T("Local AppWizard-Generated Applications"));
+
+	// create loggers to be used throughout this program
+	logging::make_logger(DEFAULT_LOG);
+	logging::make_logger(JSON_LOG);
 
 	CXPowerControlDlg dlg;
 	m_pMainWnd = &dlg;

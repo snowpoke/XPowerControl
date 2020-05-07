@@ -17,9 +17,11 @@
 #include "FirstSetupDlg.h"
 #include "Version.h"
 #include "http_requests.h"
+#include "wstring_transform.h"
+#include "logging.h"
 #include <filesystem>
 #include <boost/algorithm/string.hpp>
-
+#include <iterator>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -42,6 +44,7 @@ CXPowerControlDlg::CXPowerControlDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_XPOWERCONTROL_DIALOG, pParent)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	_logger = logging::get_logger(DEFAULT_LOG);
 }
 
 void CXPowerControlDlg::DoDataExchange(CDataExchange* pDX)
@@ -67,7 +70,7 @@ ON_WM_WINDOWPOSCHANGED()
 END_MESSAGE_MAP()
 
 bool CXPowerControlDlg::start_monitoring() {
-	cout << "Sending signal to start monitoring.\n";
+	_logger->info("Sending signal to start monitoring.");
 	// run game monitor
 	string SESSID = read_from_settings<string>("iksm-session");
 
@@ -88,7 +91,7 @@ bool CXPowerControlDlg::start_monitoring() {
 
 		thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
 		thread_monitor_main = AfxBeginThread(monitor_main_alt, this);
-		cout << "Started montioring\n";
+		_logger->info("Started montioring");
 		return TRUE;  // return TRUE  unless you set the focus to a control
 	}
 }
@@ -96,12 +99,12 @@ bool CXPowerControlDlg::start_monitoring() {
 
 
 void  CXPowerControlDlg::stop_monitoring() {
-	cout << "Sending signal to stop monitoring.\n";
+	_logger->info("Sending signal to stop monitoring.");
 	kill_monitor_main = true;
 	kill_rotation_monitor = true;
 	DWORD main_response = WaitForSingleObject(thread_monitor_main->m_hThread, 5000);
 	DWORD rotation_response = WaitForSingleObject(thread_rotation_monitor->m_hThread, 5000);
-	cout << "Stopped monitoring\n";
+	_logger->info("Stopped monitoring");
 	kill_monitor_main = false;
 	kill_rotation_monitor = false;
 }
@@ -240,11 +243,7 @@ BOOL CXPowerControlDlg::OnInitDialog()
 	TCHAR exec_filename[MAX_PATH];
 	GetModuleFileName(NULL, exec_filename, MAX_PATH);
 	this_ver = Version::from_file(exec_filename);
-
-	string version_page = http_requests::load_page("https://raw.githubusercontent.com/snowpoke/XPowerControl-public/master/version.json","");
-	boost::erase_all(version_page, "\n");
-	auto j_version = nlohmann::json::parse(version_page);
-	latest_ver = Version::from_string(j_version["latest_version"]);
+	latest_ver = Version::from_string(http_requests::get_global_info("latest_version"));
 
 	if (this_ver < latest_ver) {
 		AfxBeginThread(thread_update_info, this);
@@ -274,7 +273,11 @@ BOOL CXPowerControlDlg::OnInitDialog()
 		in_file >> j;
 		in_file.close();
 	}
-	catch (...) {
+	catch (exception e) {
+		ifstream in_file("settings.txt");
+		string settings_str{std::istreambuf_iterator<char>{in_file},{}}; // uniform-initialization to avoid being parsed as function declaration
+		_logger->error("Settings file was reported as corrupted.\ne.what() returned: {}\nsettings file content: {}", e.what(), settings_str);
+		in_file.close();
 		AfxMessageBox(_T("Your settings file is corrupted. A new file will be created, but there might be an error in your woomyDX installation."));
 		ofstream out_file("settings.txt");
 		out_file << "{}";
@@ -293,7 +296,7 @@ BOOL CXPowerControlDlg::OnInitDialog()
 
 	if (!is_current_version) { // if the version is not up to date, we transfer the data
 
-		j["settings_version"] = 4;
+		j["settings_version"] = CURRENT_SETTING_VERSION;
 		j["iksm-session"] = read_from_settings<string>("iksm_session","");
 		j["mitm_exec"] = read_from_settings<string>("mitm_exec", "");
 		j["emu_exec"] = read_from_settings<string>("emu_exec", "");
@@ -308,6 +311,7 @@ BOOL CXPowerControlDlg::OnInitDialog()
 		j["do_hidepower"] = read_from_settings<bool>("do_hidepower", true);
 		j["do_ontop"] = read_from_settings<bool>("do_ontop", true);
 		j["performed_setup"] = read_from_settings<bool>("performed_setup", false);
+		j["latest_nso_version"] = read_from_settings<string>("latest_nso_version", "0.0.0.0");
 
 		ofstream out_file("settings.txt");
 		out_file << j;
@@ -321,17 +325,20 @@ BOOL CXPowerControlDlg::OnInitDialog()
 		bool create_success = filesystem::create_directory(matchdata_dir);
 		if (!create_success) {
 			wstring message = L"The program tried to create a folder for your intended stream file directory" + transform::s2ws(matchdata_dir)\
-				+ L"\nbut failed to do so.\nThis program will run regardless, but stream files will not be created.";
+				+ L"\nbut failed to do so.\nThis program will run regardless, but stream files will not be created.";\
 			MessageBox(message.c_str(), L"Stream file error", MB_OK | MB_ICONWARNING);
+			_logger->warn("Sent warning to user: {}", transform::ws2s(message));
 		}
 	}
 	else if (!filesystem::is_directory(matchdata_dir)) {
 		wstring message = L"The intended directory for you stream output files \"" + transform::s2ws(matchdata_dir) + L"\" was found, but it seems to be a file, not a directory.\n\
 This program will run regardless, but stream files will not be created.";
 		MessageBox(message.c_str(), L"Stream file error", MB_OK | MB_ICONWARNING);
+		_logger->warn("Sent warning to user: {}", transform::ws2s(message));
 	}
 
 	if (!read_from_settings<bool>("performed_setup")) {
+		_logger->info("Starting initial setup.");
 		FirstSetupDlg dlg;
 		dlg.DoModal();
 	}

@@ -217,8 +217,6 @@ void NewTokenDlg::OnEnChangeEditManual()
 			iksm_token_respond(IDC_STATIC_MANUAL_BADVALUE, _T("Invalid Token: Failed to authenticate."));
 		}
 	}
-
-	// TODO:  Add your control notification handler code here
 }
 
 

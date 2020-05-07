@@ -210,12 +210,14 @@
   <ItemGroup>
     <ClInclude Include="ActionRequiredDlg.h" />
     <ClInclude Include="CSettingsDialog.h" />
+    <ClInclude Include="CustomDialogBase.h" />
     <ClInclude Include="FirstSetup.h" />
     <ClInclude Include="FirstSetupDlg.h" />
     <ClInclude Include="FirstSetupDlg2.h" />
     <ClInclude Include="FirstSetupDlg3.h" />
     <ClInclude Include="FirstSetupDlg4.h" />
     <ClInclude Include="http_requests.h" />
+    <ClInclude Include="logging.h" />
     <ClInclude Include="monitor.h" />
     <ClInclude Include="NewTokenDlg.h" />
     <ClInclude Include="PictureCtrl.h" />
@@ -231,6 +233,7 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="TokenRetriever.h" />
     <ClInclude Include="token_retrieve.h" />
+    <ClInclude Include="UpdateNSODlg.h" />
     <ClInclude Include="Version.h" />
     <ClInclude Include="wstring_transform.h" />
     <ClInclude Include="XPowerControl.h" />
@@ -239,6 +242,7 @@
   <ItemGroup>
     <ClCompile Include="ActionRequiredDlg.cpp" />
     <ClCompile Include="CSettingsDialog.cpp" />
+    <ClCompile Include="CustomDialogBase.cpp" />
     <ClCompile Include="FirstSetup.cpp" />
     <ClCompile Include="FirstSetupDlg.cpp" />
     <ClCompile Include="FirstSetupDlg2.cpp" />
@@ -262,6 +266,7 @@
     </ClCompile>
     <ClCompile Include="TokenRetriever.cpp" />
     <ClCompile Include="token_retrieve.cpp" />
+    <ClCompile Include="UpdateNSODlg.cpp" />
     <ClCompile Include="Version.cpp" />
     <ClCompile Include="XPowerControl.cpp" />
     <ClCompile Include="XPowerControlDlg.cpp" />

@@ -8,6 +8,8 @@
 #include "wstring_transform.h"
 #include "nlohmann/json.hpp"
 #include "ActionRequiredDlg.h"
+#include "UpdateNSODlg.h"
+#include "logging.h"
 #include <string>
 #include <filesystem>
 using namespace std;
@@ -19,7 +21,7 @@ IMPLEMENT_DYNAMIC(RetrievalProgressDlg, CDialogEx)
 RetrievalProgressDlg::RetrievalProgressDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_RETRIEVE_PROGRESS, pParent)
 {
-
+	_logger = logging::get_logger(DEFAULT_LOG);
 }
 
 RetrievalProgressDlg::~RetrievalProgressDlg()
@@ -119,6 +121,14 @@ BOOL RetrievalProgressDlg::OnInitDialog() {
 	SetIcon(m_hIcon1, TRUE);			// Set big icon
 	SetIcon(m_hIcon1, FALSE);		// Set small icon
 
+	install_validity_check();
+
+	if (UpdateNSODlg::is_update_required()) {
+		UpdateNSODlg nso_update_dlg;
+		nso_update_dlg.DoModal();
+	}
+
+
 	// make sure the window is in the foreground, even after helper software is called
 	::SetForegroundWindow(this->GetSafeHwnd());
 	::SetWindowPos(this->GetSafeHwnd(),
@@ -159,6 +169,157 @@ BOOL RetrievalProgressDlg::OnInitDialog() {
 	AfxBeginThread(iksm_listener, this);
 
 	return TRUE;
+}
+
+void RetrievalProgressDlg::install_validity_check()
+{
+	// check bs version
+	CRegKey registry;
+	CString bs_version_str;
+	ULONG sz_version = 20;
+	auto bs_key_ret = registry.Open(HKEY_LOCAL_MACHINE, L"SOFTWARE\\BlueStacks", KEY_READ);
+	bs_version_str = CString();
+	registry.QueryStringValue(L"ClientVersion", bs_version_str.GetBuffer(sz_version), &sz_version);
+	Version bs_version = Version::from_string(transform::ws2s(wstring(bs_version_str)));
+	Version bs_min_version = Version::from_int(4, 170, 10, 1001);
+	if (bs_version != bs_min_version) {
+		_logger->warn("The recommended version for BlueStacks is {}, but the user has installed version {}.",
+			transform::ws2s(bs_min_version.to_wstring(4)), transform::ws2s(bs_min_version.to_wstring(4)));
+		MessageBox(L"Your BlueStacks installation is not on the recommended version. You might encounter problems during the retrieval process.");
+	}
+	else {
+		_logger->info("The user is using the recommended version of Bluestacks.");
+	}
+
+
+	// check mitm signature files
+	// retrieve home path for user running the program
+	wchar_t home_path[MAX_PATH];
+	HANDLE current_user;
+	OpenProcessToken(GetCurrentProcess(), TOKEN_READ, &current_user);
+	SHGetFolderPath(NULL, CSIDL_PROFILE, current_user, SHGFP_TYPE_CURRENT, home_path);
+	wstring cert_path = wstring(home_path) + L"\\.mitmproxy\\";
+	vector<wstring> cert_names = { L"mitmproxy-ca.p12", L"mitmproxy-ca.pem", L"mitmproxy-ca-cert.cer",
+		L"mitmproxy-ca-cert.p12", L"mitmproxy-ca-cert.pem", L"mitmproxy-dhparam.pem" };
+
+	// check if the expected certificate files exist
+	bool all_certs_found = true;
+	for (auto& name : cert_names) {
+		if (!filesystem::exists(cert_path + name)) {
+			_logger->warn("Certificate file was not found, expected file location: {}", transform::ws2s(cert_path + name));
+			all_certs_found = false;
+		}
+	}
+
+
+	// check if certificate metadata matches
+	typedef struct _WIN32_FILE_ATTRIBUTE_DATA {
+		DWORD    dwFileAttributes;
+		FILETIME ftCreationTime;
+		FILETIME ftLastAccessTime;
+		FILETIME ftLastWriteTime;
+		DWORD    nFileSizeHigh;
+		DWORD    nFileSizeLow;
+
+		bool operator==(const _WIN32_FILE_ATTRIBUTE_DATA& rhs) // warning: this is actually not an exact ==, because some elements are ignored
+		{
+			return (//ftCreationTime.dwHighDateTime == rhs.ftCreationTime.dwHighDateTime
+				//&& ftCreationTime.dwLowDateTime == rhs.ftCreationTime.dwLowDateTime
+				ftLastWriteTime.dwHighDateTime == rhs.ftLastWriteTime.dwHighDateTime
+				&& ftLastWriteTime.dwLowDateTime == rhs.ftLastWriteTime.dwLowDateTime
+				&& nFileSizeLow == rhs.nFileSizeLow);
+		}
+
+	} WIN32_FILE_ATTRIBUTE_DATA, * LPWIN32_FILE_ATTRIBUTE_DATA; 
+	
+	WIN32_FILE_ATTRIBUTE_DATA CERTINFO1{ 0, {1358846752, 30796666}, {0, 0},  {873945763, 30699675}, 0, 2529 },
+		CERTINFO2{ 0, {1358896605, 30796666}, {0, 0}, {873809279, 30699675}, 0, 3022 },
+		CERTINFO3{ 0, {1358707119, 30796666}, {0, 0}, {873848294, 30699675}, 0, 1318 },
+		CERTINFO4{ 0, {1358796874, 30796666}, {0, 0}, {873887318, 30699675}, 0, 1140 },
+		CERTINFO5{ 0, {1358826796, 30796666}, {0, 0}, {873838540, 30699675}, 0, 1318 },
+		CERTINFO6{ 0, {1358946481, 30796666}, {0, 0}, {873984849, 30699675}, 0, 770 };
+
+	map<wstring, WIN32_FILE_ATTRIBUTE_DATA> cert_name_to_info{ {L"mitmproxy-ca.p12", CERTINFO1}, {L"mitmproxy-ca.pem", CERTINFO2},
+	{L"mitmproxy-ca-cert.cer", CERTINFO3}, {L"mitmproxy-ca-cert.p12", CERTINFO4},
+	{L"mitmproxy-ca-cert.pem", CERTINFO5}, {L"mitmproxy-dhparam.pem", CERTINFO6} };
+
+	WIN32_FILE_ATTRIBUTE_DATA file_info;
+	bool cert_metadata_matches = true;
+	for (auto& name : cert_names) {
+		wstring temp_path = cert_path + name;
+		GetFileAttributesEx(temp_path.c_str(), GetFileExInfoStandard, &file_info);
+
+		_logger->info("Found information about file {}: ftCreationTime: {}/{} ftLastAccessTime: {}/{} ftLastWriteTime: {}/{} nFileSizeHigh: {} nFileSizeLow: {}",
+			transform::ws2s(temp_path),
+			file_info.ftCreationTime.dwLowDateTime, file_info.ftCreationTime.dwHighDateTime,
+			file_info.ftLastAccessTime.dwLowDateTime, file_info.ftLastAccessTime.dwHighDateTime,
+			file_info.ftLastWriteTime.dwLowDateTime, file_info.ftLastWriteTime.dwHighDateTime,
+			file_info.nFileSizeHigh, file_info.nFileSizeLow);
+
+		if (cert_name_to_info[name] == file_info) {
+			_logger->info("Metadata for {} matches with expected metadata.", transform::ws2s(temp_path));
+		}
+		else {
+			_logger->warn("Metadata for {} does NOT match with the expected metadata.", transform::ws2s(temp_path));
+			cert_metadata_matches = false;
+		}
+	}
+
+
+	// check mitm python script
+	WIN32_FILE_ATTRIBUTE_DATA SCRIPTINFO{ 0, {1220656956, 30744796}, {0, 0}, {1445460535, 30801432}, 0, 821 };
+	bool python_metadata_matches = true;
+	GetFileAttributesEx(L"mitm_script.py", GetFileExInfoStandard, &file_info);
+
+	_logger->info("Found information about file mitm_script.py: ftCreationTime: {}/{} ftLastAccessTime: {}/{} ftLastWriteTime: {}/{} nFileSizeHigh: {} nFileSizeLow: {}",
+		file_info.ftCreationTime.dwLowDateTime, file_info.ftCreationTime.dwHighDateTime,
+		file_info.ftLastAccessTime.dwLowDateTime, file_info.ftLastAccessTime.dwHighDateTime,
+		file_info.ftLastWriteTime.dwLowDateTime, file_info.ftLastWriteTime.dwHighDateTime,
+		file_info.nFileSizeHigh, file_info.nFileSizeLow);
+
+	if (SCRIPTINFO == file_info) {
+		_logger->info("Metadata for mitm_script.py matches with expected metadata.");
+	}
+	else {
+		_logger->warn("Metadata for mitm_script.py does NOT match with the expected metadata.");
+		python_metadata_matches = false;
+	}
+
+	// check root.vdi
+	CString cstr_datadir;
+	ULONG sz_datadir = MAX_PATH;
+	registry.QueryStringValue(L"DataDir", cstr_datadir.GetBuffer(sz_datadir), &sz_datadir);
+	wstring vdi_path = wstring(cstr_datadir) + L"Android\\Root.vdi";
+	WIN32_FILE_ATTRIBUTE_DATA IMAGEINFO{ 0, {1850568137, 30792546}, {0, 0}, {2494728951, 30795872}, 0, 1070596096 };
+	bool image_metadata_matches = true;
+	GetFileAttributesEx(vdi_path.c_str(), GetFileExInfoStandard, &file_info);
+
+	_logger->info("Found information about file {}: ftCreationTime: {}/{} ftLastAccessTime: {}/{} ftLastWriteTime: {}/{} nFileSizeHigh: {} nFileSizeLow: {}",
+		transform::ws2s(vdi_path),
+		file_info.ftCreationTime.dwLowDateTime, file_info.ftCreationTime.dwHighDateTime,
+		file_info.ftLastAccessTime.dwLowDateTime, file_info.ftLastAccessTime.dwHighDateTime,
+		file_info.ftLastWriteTime.dwLowDateTime, file_info.ftLastWriteTime.dwHighDateTime,
+		file_info.nFileSizeHigh, file_info.nFileSizeLow);
+
+	if (IMAGEINFO == file_info) {
+		_logger->info("Metadata for root.vdi matches with expected metadata.");
+	}
+	else {
+		_logger->warn("Metadata for root.vdi does NOT match with the expected metadata.");
+		image_metadata_matches = false;
+	}
+	registry.Close();
+
+	// inform the user about issues that might incur
+	if (!cert_metadata_matches)
+		MessageBox(L"Your installation of MITM is not using the expected certificates. \
+Unless you know what you are doing, please redo the woomyDX installation process or contact the developer.",L"Invalid installation detected", MB_ICONWARNING);
+	if (!python_metadata_matches)
+		MessageBox(L"Your woomyDX installation is not associated with the expected python script. \
+Unless you know what you're doing, please check that you have transferred the program or update files correctly.", L"Invalid installation detected", MB_ICONWARNING);
+	if (!image_metadata_matches)
+		MessageBox(L"The android system image contains unexpected modifactions. \
+Unless you know what you are doing, please redo the woomyDX installation process or contact the developer.", L"Invalid installation detected", MB_ICONWARNING);
 }
 
 

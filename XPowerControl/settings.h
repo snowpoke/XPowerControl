@@ -5,7 +5,7 @@
 #include "nlohmann/json.hpp"
 #include "wstring_transform.h"
 #include <optional>
-#define CURRENT_SETTING_VERSION 4
+#define CURRENT_SETTING_VERSION 5
 
 bool settings_exist(std::string key_t); // checks if a certain key exists in the settings file
 

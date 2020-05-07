@@ -1,14 +1,14 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include "afxdialogex.h"
+#include "FirstSetup.h"
 #include "FirstSetupDlg2.h"
 #include "FirstSetupDlg3.h"
 #include "FirstSetupDlg4.h"
-#include "FirstSetup.h"
-#include "afxdialogex.h"
 #include "wstring_transform.h"
 #include "TokenRetriever.h"
+#include "Version.h"
 #include <memory>
 #include <iostream>
-#include <Windows.h>
 #include <string>
 #include <cstring>      ///< memset
 #include <errno.h>      ///< errno
@@ -20,6 +20,7 @@
 #include "bitformat.hpp"
 #include "bitexception.hpp"
 #include "bitmemextractor.hpp"
+#include "logging.h"
 #include <io.h>
 #include <vector>
 #include <map>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
@@ -38,11 +39,14 @@ void FirstSetup::setup_mitm()
 {
 
 	// retrieve home path for user running the program
+	logging::log_ptr _logger = logging::get_logger(DEFAULT_LOG);
+
 	wchar_t home_path[MAX_PATH];
 	HANDLE current_user;
 	OpenProcessToken(GetCurrentProcess(), TOKEN_READ, &current_user);
 	SHGetFolderPath(NULL, CSIDL_PROFILE, current_user, SHGFP_TYPE_CURRENT, home_path);
 	wstring cert_path = wstring(home_path) + L"\\.mitmproxy\\";
+	_logger->info("Saving certificates to path {}", transform::ws2s(cert_path));
 
 	CreateDirectory(cert_path.c_str(), NULL);
 	// delete existing certificates
@@ -56,8 +60,10 @@ void FirstSetup::setup_mitm()
 		bit7z::Bit7zLibrary lib{ L"7zxa.dll" };
 		bit7z::BitExtractor extractor{ lib, bit7z::BitFormat::SevenZip };
 		extractor.extract(L"mitmproxy_certs.7z", cert_path);
+		_logger->info("Successfully extracted mitmproxy certificates.");
 	}
 	catch (const bit7z::BitException & ex) {
+		_logger->error("Failed to extract mitmproxy certificates. ex.what() returned: {}", (string) ex.what());
 		AfxMessageBox(transform::s2ws(ex.what()).c_str());
 		AfxThrowUserException();
 	}
@@ -96,16 +102,14 @@ BOOL CALLBACK kill_proxywin(HWND hwnd, LPARAM lParam) {
 	auto height = window_info.rcWindow.bottom - window_info.rcWindow.top;
 
 	if (wstring(title) == L"BlueStacks" && to_wstring(window_info.dwExStyle) == L"3758164225" && visibility == true) {
+		logging::log_ptr _logger = logging::get_logger(DEFAULT_LOG);
 
-		wcout << L"Window Title: " << title << L"\n";
-		wcout << L"Visibility: " << to_wstring(visibility) << L"\n";
-		wcout << L"Has Parent: " << to_wstring(parent != NULL) << L"\n";
+		_logger->info("Closing window with the following parameters:\n\
+Window Title: {}\nVisibility: {}\nHas Parent: {}\nWindow rect: {}x{}\nExtended window styles: {}",
+transform::ws2s(title), to_string(visibility), to_string(parent != NULL),
+to_string(height), to_string(width), to_string(window_info.dwExStyle));
 		if (parent != NULL)
-			wcout << L"Parent Title: " << parent_title << L"\n";
-
-
-		wcout << L"Window rect: " << height << L"x" << width << L"\n";
-		wcout << L"Extended window styles:" << to_wstring(window_info.dwExStyle) << L"\n\n";
+			_logger->info("Parent Title: {}", transform::ws2s(parent_title));
 		
 		// we send a WM_CLOSE message to the program
 		SendMessage(hwnd, WM_CLOSE, NULL, NULL);
@@ -117,20 +121,30 @@ void FirstSetup::setup_bs(optional<CWnd*> feedback_win) {
 	CRegKey registry;
 	ULONG sz_datadir = MAX_PATH;
 	ULONG sz_installdir = MAX_PATH;
+	ULONG sz_version = 20;
 	CString cstr_datadir = CString();
 	CString cstr_installdir = CString();
+	CString bs_version_str;
+
+	logging::log_ptr _logger = logging::get_logger(DEFAULT_LOG);
 
 	if (feedback_win) {
 		(*feedback_win)->SetWindowTextW(L"Moving emulator data...");
 	}
+	_logger->info("Moving Root.vdi");
 
 	// Computer\HKEY_LOCAL_MACHINE\SOFTWARE\BlueStacks has info we need in DataDir and InstallDir
 	registry.Open(HKEY_LOCAL_MACHINE, L"SOFTWARE\\BlueStacks", KEY_READ);
 	registry.QueryStringValue(L"DataDir", cstr_datadir.GetBuffer(sz_datadir), &sz_datadir);
 	registry.QueryStringValue(L"InstallDir", cstr_installdir.GetBuffer(sz_installdir), &sz_installdir);
+	registry.QueryStringValue(L"ClientVersion", bs_version_str.GetBuffer(sz_version), &sz_version);
 
 	wstring datadir = wstring(cstr_datadir);
 	wstring installdir = wstring(cstr_installdir);
+	Version bs_version = Version::from_string(transform::ws2s(wstring(bs_version_str)));
+
+	_logger->info("DataDir for BlueStacks: {}", transform::ws2s(datadir));
+	_logger->info("InstallDir for BlueStacks: {}", transform::ws2s(installdir));
 
 	// move Root.vdi
 	wstring vdi_path = datadir + L"Android\\Root.vdi";
@@ -139,6 +153,8 @@ void FirstSetup::setup_bs(optional<CWnd*> feedback_win) {
 
 	if (feedback_win)
 		(*feedback_win)->SetWindowTextW(L"Adjusting android proxy settings...");
+
+	_logger->info("Adjusting android proxy settings.");
 
 	// launch BlueStacks
 	HANDLE bs_handle = TokenRetriever::run_command(datadir + L"..\\Client\\Bluestacks.exe");
@@ -150,32 +166,38 @@ void FirstSetup::setup_bs(optional<CWnd*> feedback_win) {
 	HANDLE exec_handle;
 	vector<HANDLE> proxy_handles;
 	// run code to set a proxy - this only works when the BlueStacks emulator has loaded, so after this loop ends, we know that the emulator is running
-	do {
-		exec_handle = TokenRetriever::run_command(installdir + L"HD-ConfigHttpProxy.exe set " + transform::s2ws(get_local_ip()) + L" 8080");
+	bool proxy_assigned = false;
+	while (!proxy_assigned) {
+		exec_handle = TokenRetriever::run_command(wstring(L"\"") + installdir + L"HD-ConfigHttpProxy.exe\" set " + transform::s2ws(get_local_ip()) + L" 8080", installdir.data(), DETACHED_PROCESS);
 		proxy_handles.push_back(exec_handle);
 		process_handle = job_to_process_handle(exec_handle);
-		WaitForSingleObject(process_handle, 7000); //TODO: This would work way better if we regularly checked if the window has opened
+		//WaitForSingleObject(process_handle, INFINITE); //TODO: This would work way better if we regularly checked if the window has opened
 		
+		// every second the proxy configurator runs, check if a window is open
+		while (WaitForSingleObject(process_handle, 1000) != WAIT_OBJECT_0) {
+			// if GetGuiResources returns a non-zero value, a UI window has been opened (which means the proxy change succeeded)
+			gui_count = GetGuiResources(process_handle, GR_USEROBJECTS);
+			_logger->info("Got GUI count: {}", to_string(gui_count));
 
-		// if GetGuiResources returns a non-zero value, a UI window has been opened (which means the proxy change succeeded)
-		gui_count = GetGuiResources(process_handle, GR_USEROBJECTS);
-		cout << "Got GUI count: " << to_string(gui_count) << "\n";
-		if (!GetExitCodeProcess(process_handle, &exit_code)) {
-			cout << "GetExitCodeProcess Error: " << to_string(GetLastError()) << "\n";
-			continue;
-		}
+			if (!GetExitCodeProcess(process_handle, &exit_code)) {
+				_logger->info("GetExitCodeProgress Error: {}", to_string(GetLastError()));
+				break; // try to call the proxy configurator again
+			}
 
-		cout << "Exit code: " << to_string(exit_code) << "\n";
-		if (exit_code == 259 && gui_count > 3) { // this code is active when a pop-up is on the screen, we can force quit from here
-			// close all instances of the proxy program we've opened so far
-			EnumWindows(kill_proxywin, NULL); // sends WM_CLOSE to the proxy window
-			//for_each(proxy_handles.begin(), proxy_handles.end(), [](HANDLE h) {CloseHandle(h); });
-			break;
+			_logger->info("Exit code: {}", to_string(exit_code));
+			if (exit_code == 259 && gui_count > 3) { // this code is active when a pop-up is on the screen, we can force quit from here
+				// close all instances of the proxy program we've opened so far
+				EnumWindows(kill_proxywin, NULL); // sends WM_CLOSE to the proxy window
+				//for_each(proxy_handles.begin(), proxy_handles.end(), [](HANDLE h) {CloseHandle(h); });
+				_logger->info("Sending WM_CLOSE to proxy window");
+				proxy_assigned = true;
+				break; // since proxy_assigned, this will also leave the overarching loop
+			}
 		}
 
 		WaitForSingleObject(process_handle, 5000);
 		Sleep(10);
-	} while (exit_code != 0);
+	}
 
 	if (feedback_win)
 		(*feedback_win)->SetWindowTextW(L"Waiting for emulator to automatically shut down...");
@@ -210,6 +232,9 @@ void FirstSetup::cleanup()
 	DeleteFile(L"installer_mitm.exe");
 	DeleteFile(L"Root.vdi");
 	DeleteFile(L"mitmproxy_certs.7z");
+
+	logging::log_ptr _logger = logging::get_logger(DEFAULT_LOG);
+	_logger->info("Deleted temporary installer files.");
 }
 
 
@@ -219,13 +244,16 @@ string FirstSetup::get_local_ip() {
 	int dns_port = 53;
 	int startup_ret;
 	int retries = 0;
+
+	logging::log_ptr _logger = logging::get_logger(DEFAULT_LOG);
+
 	do {
 		WORD w_version_requested = MAKEWORD(2, 2);
 		WSADATA wsa_data;
 
 		startup_ret = WSAStartup(w_version_requested, &wsa_data);
 		if (startup_ret != 0)
-			cout << "Startup error " << to_string(startup_ret) << "\n";
+			_logger->warn("Startup error {}", to_string(startup_ret));
 		
 	} while (startup_ret != 0 && ++retries < 2);
 
@@ -234,10 +262,7 @@ string FirstSetup::get_local_ip() {
 
 	//Socket could not be created
 	if (sock == INVALID_SOCKET)
-	{
-		std::cout << "Socket error " << to_string(WSAGetLastError()) << std::endl;
-
-	}
+		_logger->error("Socket error {}", to_string(WSAGetLastError()));
 
 	memset(&serv, 0, sizeof(serv));
 	serv.sin_family = AF_INET;
@@ -246,10 +271,7 @@ string FirstSetup::get_local_ip() {
 
 	int err = connect(sock, (const struct sockaddr*) & serv, sizeof(serv));
 	if (err < 0)
-	{
-		std::cout << "Error number: " << errno
-			<< ". Error message: " << strerror(errno) << std::endl;
-	}
+		_logger->error("Error number: {} -- Error message: {}", to_string(errno), strerror(errno));
 
 	struct sockaddr_in name;
 	socklen_t namelen = sizeof(name);
@@ -258,17 +280,13 @@ string FirstSetup::get_local_ip() {
 	char buffer[80];
 	const char* p = inet_ntop(AF_INET, &name.sin_addr, buffer, 80);
 	if (p != NULL)
-	{
-		std::cout << "Local IP address is: " << buffer << std::endl;
-	}
+		_logger->info("Local IP address is: {}", buffer);
 	else
-	{
-		std::cout << "Error number: " << errno
-			<< ". Error message: " << strerror(errno) << std::endl;
-	}
+		_logger->error("Error number: {} -- Error message: {}", to_string(errno), strerror(errno));
 
 	closesocket(sock);
 	WSACleanup();
+
 	return buffer;
 }
 

@@ -5,14 +5,146 @@
 #include "nlohmann/json.hpp"
 #include "wstring_transform.h"
 #include "FirstSetup.h"
+#include "ActionRequiredDlg.h"
+#include "logging.h"
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
 #include <fstream>
 #include <curl/curl.h>
+#include <aclapi.h>
+#include <tchar.h>
+#include <pathcch.h>
+#pragma comment(lib, "Pathcch.lib")
 
 using namespace std;
 
-HANDLE TokenRetriever::run_command(wstring command_t) {
+SECURITY_ATTRIBUTES give_all_rights() {
+
+	DWORD dwRes, dwDisposition;
+	PSID pEveryoneSID = NULL, pAdminSID = NULL;
+	PACL pACL = NULL;
+	PSECURITY_DESCRIPTOR pSD = NULL;
+	EXPLICIT_ACCESS ea[2];
+	SID_IDENTIFIER_AUTHORITY SIDAuthWorld =
+		SECURITY_WORLD_SID_AUTHORITY;
+	SID_IDENTIFIER_AUTHORITY SIDAuthNT = SECURITY_NT_AUTHORITY;
+	SECURITY_ATTRIBUTES sa;
+	LONG lRes;
+	HKEY hkSub = NULL;
+
+	// Create a well-known SID for the Everyone group.
+	if (!AllocateAndInitializeSid(&SIDAuthWorld, 1,
+		SECURITY_WORLD_RID,
+		0, 0, 0, 0, 0, 0, 0,
+		&pEveryoneSID))
+	{
+		_tprintf(_T("AllocateAndInitializeSid Error %u\n"), GetLastError());
+		goto Cleanup;
+	}
+
+	// Initialize an EXPLICIT_ACCESS structure for an ACE.
+	// The ACE will allow Everyone read access to the key.
+	ZeroMemory(&ea, 2 * sizeof(EXPLICIT_ACCESS));
+	ea[0].grfAccessPermissions = MAXIMUM_ALLOWED;
+	ea[0].grfAccessMode = SET_ACCESS;
+	ea[0].grfInheritance = CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE;
+	ea[0].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+	ea[0].Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
+	ea[0].Trustee.ptstrName = (LPTSTR)pEveryoneSID;
+
+	// Create a SID for the BUILTIN\Administrators group.
+	if (!AllocateAndInitializeSid(&SIDAuthNT, 2,
+		SECURITY_BUILTIN_DOMAIN_RID,
+		DOMAIN_ALIAS_RID_ADMINS,
+		0, 0, 0, 0, 0, 0,
+		&pAdminSID))
+	{
+		_tprintf(_T("AllocateAndInitializeSid Error %u\n"), GetLastError());
+		goto Cleanup;
+	}
+
+	// Initialize an EXPLICIT_ACCESS structure for an ACE.
+	// The ACE will allow the Administrators group full access to
+	// the key.
+	ea[1].grfAccessPermissions = MAXIMUM_ALLOWED;
+	ea[1].grfAccessMode = SET_ACCESS;
+	ea[1].grfInheritance = CONTAINER_INHERIT_ACE | OBJECT_INHERIT_ACE;
+	ea[1].Trustee.TrusteeForm = TRUSTEE_IS_SID;
+	ea[1].Trustee.TrusteeType = TRUSTEE_IS_GROUP;
+	ea[1].Trustee.ptstrName = (LPTSTR)pAdminSID;
+
+	// Create a new ACL that contains the new ACEs.
+	dwRes = SetEntriesInAcl(2, ea, NULL, &pACL);
+	if (ERROR_SUCCESS != dwRes)
+	{
+		_tprintf(_T("SetEntriesInAcl Error %u\n"), GetLastError());
+		goto Cleanup;
+	}
+
+	// Initialize a security descriptor.  
+	pSD = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR,
+		SECURITY_DESCRIPTOR_MIN_LENGTH);
+	if (NULL == pSD)
+	{
+		_tprintf(_T("LocalAlloc Error %u\n"), GetLastError());
+		goto Cleanup;
+	}
+
+	if (!InitializeSecurityDescriptor(pSD,
+		SECURITY_DESCRIPTOR_REVISION))
+	{
+		_tprintf(_T("InitializeSecurityDescriptor Error %u\n"),
+			GetLastError());
+		goto Cleanup;
+	}
+
+	// Add the ACL to the security descriptor. 
+	if (!SetSecurityDescriptorDacl(pSD,
+		TRUE,     // bDaclPresent flag   
+		pACL,
+		FALSE))   // not a default DACL 
+	{
+		_tprintf(_T("SetSecurityDescriptorDacl Error %u\n"),
+			GetLastError());
+		goto Cleanup;
+	}
+
+	// Initialize a security attributes structure.
+	sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+	sa.lpSecurityDescriptor = pSD;
+	sa.bInheritHandle = FALSE;
+
+Cleanup:
+	if (pEveryoneSID)
+		FreeSid(pEveryoneSID);
+	if (pAdminSID)
+		FreeSid(pAdminSID);
+	if (pACL)
+		LocalFree(pACL);
+	if (pSD)
+		LocalFree(pSD);
+	if (hkSub)
+		RegCloseKey(hkSub);
+
+	return sa;
+}
+
+
+TokenRetriever::TokenRetriever(std::optional<CWnd*> status_element_t, std::optional<CButton*> ok_button_t, std::wstring mitm_exec_t, std::wstring emu_command_t)
+	: status_element(status_element_t), ok_button(ok_button_t), mitm_exec(mitm_exec_t), emu_command(emu_command_t)
+{
+	_logger = logging::get_logger(DEFAULT_LOG);
+}
+
+TokenRetriever::TokenRetriever()
+{
+	TokenRetriever({}, {}, L"", L"");
+}
+
+HANDLE TokenRetriever::run_command(wstring command_t, LPCWSTR current_directory_t /* = NULL */, DWORD creation_flags_t /* = 0 */) {
+	
+	logging::log_ptr _logger = logging::get_logger(DEFAULT_LOG);
+	_logger->info("Running command: \"{}\"", transform::ws2s(command_t));
 
 	// we create an empty job object that will contain the process
 	HANDLE job_handle = CreateJobObject(NULL, NULL);
@@ -26,9 +158,11 @@ HANDLE TokenRetriever::run_command(wstring command_t) {
 
 	SetInformationJobObject(job_handle, JobObjectExtendedLimitInformation, &job_info, sizeof(job_info));
 
-	// we start mitmdump
+	// we start the process
 	STARTUPINFO si;
 	PROCESS_INFORMATION pi;
+	//SECURITY_ATTRIBUTES sa = give_all_rights(); // transfer all inheritance rights to child processes
+
 
 	ZeroMemory(&si, sizeof(si));
 	si.dwFlags = STARTF_USESHOWWINDOW;
@@ -36,18 +170,21 @@ HANDLE TokenRetriever::run_command(wstring command_t) {
 	si.cb = sizeof(si);
 	ZeroMemory(&pi, sizeof(pi));
 
-	CreateProcess(NULL,
-		&command_t[0],
-		NULL,
-		NULL,
-		FALSE,
-		0,
-		NULL,
-		NULL,
-		&si,
-		&pi);
+	auto create_success = CreateProcess(NULL,  // lpApplicationName
+		&command_t[0], // lpCommandLine
+		NULL, // lpProcessAttributes
+		NULL, // lpThreadAttributes
+		TRUE, // bInheritHandles
+		creation_flags_t, // dwCreationFlags
+		NULL, // lpEnvironment
+		current_directory_t, // lpCurrentDirectory
+		&si, // lpStartupInfo
+		&pi); // lpProcessInformation
 
-	// we associate the mitmdump with the job we created
+	auto last_error_code = GetLastError();
+	_logger->info("CreateProcess returned {}, GetLastError returned {}", to_string(create_success), to_string(last_error_code));
+
+	// we associate the process with the job we created
 	AssignProcessToJobObject(job_handle, pi.hProcess);
 
 	return job_handle; // save handle to this object
@@ -64,8 +201,8 @@ void TokenRetriever::mitm_start() {
 	// get full path for mitm_script.py
 	wchar_t buffer[MAX_PATH];
 	GetModuleFileName(NULL, buffer, MAX_PATH); // saves path of current executable in buffer
-	size_t found = wstring(buffer).find_last_of('\\');
-	wstring mitm_script_location = wstring(buffer).substr(0, found + 1) + L"mitm_script.py";
+	PathCchRemoveFileSpec(buffer, MAX_PATH); // remove filename from path
+	wstring mitm_script_location = wstring(buffer) + L"\\mitm_script.py";
 
 	mitm_handle = run_command(mitm_exec + L" -s \"" + mitm_script_location + L"\"");
 }
@@ -123,6 +260,7 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 	if(status_element)
 		(*status_element)->SetWindowTextW(L"Found authorization key! Retrieving token... [Auth Key Attempt #1]");
 
+
 	progress_percent = 70;
 
 	// we obtain the device registration token
@@ -141,21 +279,23 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 			if (status_element)
 				(*status_element)->SetWindowTextW((L"Found authorization key! Retrieving token... [Auth Key Attempt #"
 					+ to_wstring(attempt_num) + L"1]").c_str());
+
+			_logger->info("Found authorization key! Retrieving token... [Auth Key Attempt #{}]", to_string(attempt_num));
 			ifstream file;
 			file.open("registration_token.txt");
-			string line;
+			std::string file_text((std::istreambuf_iterator<char>(file)),
+				std::istreambuf_iterator<char>());
 
-			while (getline(file, line)) {
-				file_text += line;
-			}
 			Sleep(50);
 		} while (file_text.length() == 0 && attempt_num <= 3);
+		_logger->info("File 'registration_token.txt' has been found. Content of the file:\n{}", file_text);
 		file_text = remove_multi_response(file_text); // we sometimes get two datasets as a response, we remove all but the first here
 		nlohmann::json j = nlohmann::json::parse(file_text);
 		registration_token = j["parameter"]["registrationToken"].get<string>();
 	}
 	catch (const exception & e) {
 		AfxMessageBox((L"Failed retrieving the registration token. Please try again or retrieve the token manually. " + transform::s2ws(e.what())).c_str());
+		_logger->error("Failed retrieving the registration token. e.what() returned: {}", e.what());
 		AfxThrowUserException();
 	}
 
@@ -197,20 +337,22 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 			curl_easy_setopt(curl1, CURLOPT_POSTFIELDS, data.c_str());
 
 			try {
+				_logger->info("Sending request to https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken.\n \
+		Using access token {}\n \
+		Using post data {}\n \
+		Obtained response {}", access_token_t, data, buffer);
 				res = curl_easy_perform(curl1);
 			}
-			catch (...) {
+			catch (const exception& e) {
 				wstring afx_message = L"The program failed to perform the web request. (Attempt " + to_wstring(attempt_num - 1) + L"/3)";
 				AfxMessageBox(afx_message.c_str());
+				_logger->error("The program failed to perform the web request. e.what() returned: {}", e.what());
 				continue;
 			}
 			curl_easy_cleanup(curl1);
 			curl_slist_free_all(chunk);
 
-			log_manually("Sending request to https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken.\n \
-		Using access token " + access_token_t + "\n \
-		Using post data " + data + "\n \
-		Obtained response " + buffer + "\n\n\n");
+
 			buffer = remove_multi_response(buffer);
 			try {
 				nlohmann::json j = nlohmann::json::parse(buffer);
@@ -220,6 +362,7 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 				wstring afx_message = L"Failed to read the token from file. (Attempt " + to_wstring(attempt_num - 1) + L"/3)";
 				afx_message += transform::s2ws(e.what());
 				AfxMessageBox(afx_message.c_str());
+				_logger->error("Failed to read the token from file. (Attempt {}/3) e.what() returned: {}", to_string(attempt_num - 1), e.what());
 				continue;
 			}
 
@@ -228,6 +371,7 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 
 	if (gamewebtoken == "") {
 		AfxMessageBox(L"Failed retrieving the gamewebtoken. Please try again or retrieve the token manually.");
+		_logger->error("Failed retrieving the gamewebtoken.");
 		AfxThrowUserException();
 	}
 
@@ -235,6 +379,7 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 	attempt_num = 1;
 	while (ret == L"" && attempt_num <= 3) {
 		wstring dlg_text = L"Retrieving token... [Authorization Attempt #" + to_wstring(attempt_num) + L"]";
+		_logger->info("Retrieving token... [Authorization Attempt #{}]", to_string(attempt_num));
 		if (status_element)
 			(*status_element)->SetWindowTextW(dlg_text.c_str());
 		attempt_num++;
@@ -257,14 +402,16 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 			curl_easy_setopt(curl2, CURLOPT_WRITEFUNCTION, writer);
 			curl_easy_setopt(curl2, CURLOPT_WRITEDATA, &buffer);
 
-			log_manually("Sending request to https://app.splatoon2.nintendo.net/?lang=en-GB&na_country=DE&na_lang=en-US \n \
-							Using x-gamewebtoken " + gamewebtoken + "\n\n\n");
+			_logger->info("Sending request to https://app.splatoon2.nintendo.net/?lang=en-GB&na_country=DE&na_lang=en-US \n \
+							Using x-gamewebtoken {}", gamewebtoken);
 
 			try {
 				res = curl_easy_perform(curl2);
 			}
-			catch (...) {
+			catch (const exception& e) {
 				wstring afx_message = L"The program failed to perform the web request. (Attempt " + to_wstring(attempt_num - 1) + L"/3)";
+				afx_message += transform::s2ws(e.what());
+				_logger->error("The program failed to perform the web request. (Attempt {}/3) e.what() returned: {}", to_string(attempt_num - 1), e.what());
 				AfxMessageBox(afx_message.c_str());
 				continue;
 			}
@@ -275,6 +422,14 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 			curl_slist_free_all(chunk);
 
 			try {
+				// for logging purposes, we read and print the entire cookie file
+				ifstream temp_file;
+				temp_file.open(cookie_path);
+				std::string temp_file_text((std::istreambuf_iterator<char>(temp_file)),
+					std::istreambuf_iterator<char>());
+				temp_file.close();
+				_logger->info("Web request returned the following cookie (content of 'cookies.txt'):\n{}", temp_file_text);
+
 				// we now read the information from the cookie file
 				wifstream file;
 				file.open(cookie_path);
@@ -298,14 +453,16 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 
 				DeleteFile(L"cookies.txt");
 			}
-			catch (...) {
+			catch (const exception& e) {
 				wstring afx_message = L"Failed retrieving token information. (Attempt " + to_wstring(attempt_num - 1) + L"/3)";
+				_logger->error("Failed retrieving token information (Attempt {}/3). e.what() returned {}", to_string(attempt_num - 1), e.what());
 				AfxMessageBox(afx_message.c_str());
 				continue;
 			}
 		}
 		else {
 			wstring afx_message = L"Could not open web connection object. (Attempt " + to_wstring(attempt_num - 1) + L"/3)";
+			_logger->error("Could not open web connection object. (Attempt {}/3)", to_string(attempt_num - 1));
 			AfxMessageBox(afx_message.c_str());
 			continue;
 		}
@@ -313,8 +470,11 @@ wstring TokenRetriever::access_token_to_iksm(string access_token_t) {
 
 	if (ret == L"") {
 		AfxMessageBox(L"The program failed to obtain the authorization token. Please try again or retrieve the token manually.");
+		_logger->error("The program failed to obtain the authorization token.");
 		AfxThrowUserException();
 	}
+
+	_logger->info("access_token_to_iksm returns the following access token: {}", transform::ws2s(ret));
 
 	return ret;
 }
@@ -330,12 +490,34 @@ UINT TokenRetriever::token_listener(LPVOID pParam) { // checks if token file exi
 			string authorization_token;
 			file >> authorization_token;
 			file.close();
+			token_retriever->_logger->info("File 'authorization.txt' has been found. Content of the file:\n{}", authorization_token);
 			if (authorization_token == "")
 				continue;
 			DeleteFile(L"authorization.txt");
-			token_retriever->iksm_token = transform::ws2s(token_retriever->access_token_to_iksm(authorization_token));
+			ActionRequiredDlg("media/splatoon2_option.png",
+				L"Please select the \"Splatoon 2\" option.");
+			while (!token_retriever->kill_token_listener) {
+				if (boost::filesystem::exists("iksm_session.txt")) {
+					ifstream file("iksm_session.txt");
+					string iksm_token_temp;
+					file >> iksm_token_temp;
+					token_retriever->iksm_token = iksm_token_temp;
+					file.close();
+					token_retriever->_logger->info("File 'iksm_session.txt' has been found. Content of the file:\n{}", iksm_token_temp);
+					if (*token_retriever->iksm_token == "")
+						continue;
+					else {
+						DeleteFile(L"iksm_session.txt");
+						break;
+					}
+				}
+			}
+			if (token_retriever->kill_token_listener)
+				break;
+			//token_retriever->iksm_token = transform::ws2s(token_retriever->access_token_to_iksm(authorization_token));
 			Sleep(1000); //TODO: We only actually need to wait here during the first setup (and maybe not at all)
 			CloseHandle(token_retriever->mitm_handle);
+			token_retriever->_logger->info("Closed MITM handle.");
 			//CloseHandle(token_retriever->emu_handle);
 
 			if (token_retriever->status_element)
@@ -355,7 +537,8 @@ UINT TokenRetriever::token_listener(LPVOID pParam) { // checks if token file exi
 			HANDLE quit_handle = TokenRetriever::run_command(installdir + L"HD-Quit.exe");
 			HANDLE bs_process_handle = FirstSetup::job_to_process_handle(token_retriever->emu_handle);
 
-			WaitForSingleObject(bs_process_handle, INFINITE);
+			DWORD ret_code = WaitForSingleObject(bs_process_handle, INFINITE);
+			token_retriever->_logger->info("BlueStacks process has been finished. WaitForSingleObject returned: {}", to_string(ret_code));
 
 			//tokenDlg->tokenEdit.SetWindowTextW(tokenDlg->found_token.c_str());
 			//tokenDlg->tokenEdit.EnableWindow(TRUE);
@@ -368,10 +551,4 @@ UINT TokenRetriever::token_listener(LPVOID pParam) { // checks if token file exi
 	}
 
 	return 0;
-}
-
-void TokenRetriever::log_manually(string message) {
-	ofstream file;
-	file.open("log.txt", ios_base::app);
-	file << message;
 }

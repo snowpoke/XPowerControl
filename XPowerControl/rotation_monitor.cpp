@@ -5,6 +5,7 @@
 #include "settings.h"
 #include "XPowerControlDlg.h"
 #include "nlohmann/json.hpp"
+#include "logging.h"
 #include "boost/date_time/posix_time/posix_time.hpp"
 #include <boost/date_time/gregorian/gregorian.hpp>
 #include <ctime>
@@ -28,6 +29,7 @@ void write_timestamp_end(int timestamp, const string& filename) {
 }
 
 UINT monitor_rotation(LPVOID pParam) {
+	auto _logger = logging::get_logger(DEFAULT_LOG);
 
 	CXPowerControlDlg* window = (CXPowerControlDlg*)pParam;
 	string SESSID = read_from_settings<string>("iksm-session");
@@ -43,7 +45,8 @@ UINT monitor_rotation(LPVOID pParam) {
 		j = nlohmann::json::parse(schedule_string);
 		rot_end = j["gachi"].at(0)["end_time"].get<int>();
 	}
-	catch (...) {
+	catch (std::exception& e) {
+		_logger->error("Failed to load current rotation. e.what() responded: {}\nJSON result: {}", e.what(), schedule_string);
 		AfxMessageBox(L"Failed to load current rotation.");
 		AfxThrowUserException();
 	}
@@ -56,14 +59,18 @@ UINT monitor_rotation(LPVOID pParam) {
 		if (rot_seconds_left <= 0) {
 			if (window->match_running) { // the rotation is over, but we are still in a match => display "FINAL"
 				write_time("FINAL", countdown_filename);
+				_logger->info("End of rotation detected, but we are still in a match.");
 			}
 			else { // if no match is running, we update to the next rotation
+				_logger->info("Rotation is over and no match is running.");
 				schedule_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules", SESSID);
 				try {
 					j = nlohmann::json::parse(schedule_string);
 					rot_end = j["gachi"].at(0)["end_time"].get<int>();
+					_logger->info("New rotation end timestamp: {}", rot_end);
 				}
-				catch (...) {
+				catch (std::exception& e) {
+					_logger->error("Failed to load current rotation. e.what() responded: {}\nJSON result: {}", e.what(), schedule_string);
 					AfxMessageBox(L"Failed to load current rotation.");
 					AfxThrowUserException();
 				}

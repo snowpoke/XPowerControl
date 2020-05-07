@@ -6,10 +6,13 @@
 #include <string>
 #include "Analytics.h"
 #include "Version.h"
+#include "logging.h"
 
 // CXPowerControlDlg dialog
 class CXPowerControlDlg : public CDialogEx
 {
+private:
+	logging::log_ptr _logger;
 // Construction
 public:
 	CXPowerControlDlg(CWnd* pParent = nullptr);	// standard constructor

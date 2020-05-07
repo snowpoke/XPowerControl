@@ -15,6 +15,7 @@
 #define IDD_FIRSTSETUP3                 149
 #define IDD_FIRSTSETUP4                 151
 #define IDD_ACTION_REQUIRED             153
+#define IDD_UPDATE_NSO                  155
 #define IDC_WINTEXT                     1005
 #define IDC_WINVALUE                    1007
 #define IDC_LOSEVALUE                   1008
@@ -86,17 +87,22 @@
 #define IDC_STATIC_NSO_PROGRESS         1082
 #define IDC_STATIC_INSUFFICIENT_STORAGE 1083
 #define IDC_STATIC_UPDATE2              1084
-#define IDC_STATIC_PICTURE              1085
 #define IDC_STATIC_DESCRIPTION          1086
 #define IDC_STATIC_SCREENSHOT           1087
+#define IDC_PROGRESS_NSODL              1088
+#define IDC_TEST_NSOUPDATE              1089
+#define IDC_STATIC_CURRVER              1090
+#define IDC_STATIC_LATESTVER            1091
+#define IDC_STATIC_NSOPROGRESS          1092
+#define IDC_STATIC_NSOINSTALL           1092
 
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        155
+#define _APS_NEXT_RESOURCE_VALUE        157
 #define _APS_NEXT_COMMAND_VALUE         32771
-#define _APS_NEXT_CONTROL_VALUE         1088
+#define _APS_NEXT_CONTROL_VALUE         1093
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

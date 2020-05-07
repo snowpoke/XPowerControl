@@ -1254,3 +1254,15 @@ Sending request to https://app.splatoon2.nintendo.net/?lang=en-GB&na_country=DE&
  							Using x-gamewebtoken eyJhbGciOiJSUzI1NiIsImtpZCI6IlNSeVhSMG9vT0k4eW5nb1M0UkZWcE55ZTZmTSIsInR5cCI6IkpXVCIsImprdSI6Imh0dHBzOi8vYXBpLWxwMS56bmMuc3J2Lm5pbnRlbmRvLm5ldC92MS9XZWJTZXJ2aWNlL0NlcnRpZmljYXRlL0xpc3QifQ.eyJzdWIiOjUwNDAxMTQ0Njk0Mzc0NDAsImlhdCI6MTU4Mjg0NTQzOCwiaXNzIjoiYXBpLWxwMS56bmMuc3J2Lm5pbnRlbmRvLm5ldCIsImp0aSI6IjY3OGU3Mzg1LTBkNDMtNDE2OS1iODZlLTZhMzc2N2Y4MGUyOSIsImxpbmtzIjp7Im5ldHdvcmtTZXJ2aWNlQWNjb3VudCI6eyJpZCI6ImZmNTBiMzNiY2IxNGI0ZTEifX0sImV4cCI6MTU4Mjg1MjYzOCwidHlwIjoiaWRfdG9rZW4iLCJhdWQiOiI1dm8yaTJrbXp4NnBzMWwxdmpzamduanM5OXltemN3MCIsIm1lbWJlcnNoaXAiOnsiYWN0aXZlIjp0cnVlfX0.SFM_Cdm-LuI0QEjDj4YO6ppLRPXnuKT5vY52nRCGJe8bAi_kE2qHX794eYzW2yMzyXSlD2jsCJEjAD9hBMWhMMr1EEXzb1H4ZN2sSW58iEAgx23tXkdtH44IiyMIgJt-hzuFamRJqlDKKjKXMmYGhmo9LHujzExePfPkp5hWu6maJhQ9VxGq0HwbuxGp3zgH-rXKhkxPPut85KZW2NNTDQX6XClo4i21OgqnhYRFiWQEULsWAuhCpXXRGEzPptiW9XCmSiS3AFEAmq0MYlTbPb2Hq46IpQm9gOsrN3c02vrR6EiHZtzY3XRmdpu3ZVk8Jt68rgH5doZb5OFDszAx2w
 
 
+Sending request to https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken.
+ 		Using access token eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE1ODQ1ODM0MTUsInN1YiI6NTA0MDExNDQ2OTQzNzQ0MCwiaXNzIjoiYXBpLWxwMS56bmMuc3J2Lm5pbnRlbmRvLm5ldCIsIm1lbWJlcnNoaXAiOnsiYWN0aXZlIjp0cnVlfSwidHlwIjoiaWRfdG9rZW4iLCJhdWQiOiJmNDE3ZTF0aWJqcWQ5MWNoOTl1NDlpd3o1c245Y2h5MyIsImV4cCI6MTU4NDU5MDYxNX0.p-T7LbIasOTfXta1J5RPE9Io77Upp3jBZpdp46Gdc6g
+ 		Using post data {"parameter": {"f": "abcd","id": 5741031244955648,"registrationToken": "cSNJhRDf74o:APA91bFVGQ3zyFqC2jeWFVbBMidsodpc9R6ATH6lR2q3SIGI1YX_4J8XQ5-pDzt2zQjNEdkebiiUq6WJbKe79I20ZMLgD2XJhwsixEXec872IOiSavPsWq77XetEdCeLwrDTNAhojt1W","requestId": "abcd","timestamp": 0 }}
+ 		Obtained response {"correlationId": "80831c51-801548d0", "status": 9400, "errorMessage": "Bad request."}
+
+
+Sending request to https://api-lp1.znc.srv.nintendo.net/v2/Game/GetWebServiceToken.
+ 		Using access token eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE1ODQ1ODM0MTUsInN1YiI6NTA0MDExNDQ2OTQzNzQ0MCwiaXNzIjoiYXBpLWxwMS56bmMuc3J2Lm5pbnRlbmRvLm5ldCIsIm1lbWJlcnNoaXAiOnsiYWN0aXZlIjp0cnVlfSwidHlwIjoiaWRfdG9rZW4iLCJhdWQiOiJmNDE3ZTF0aWJqcWQ5MWNoOTl1NDlpd3o1c245Y2h5MyIsImV4cCI6MTU4NDU5MDYxNX0.p-T7LbIasOTfXta1J5RPE9Io77Upp3jBZpdp46Gdc6g
+ 		Using post data {"parameter": {"f": "abcd","id": 5741031244955648,"registrationToken": "cSNJhRDf74o:APA91bFVGQ3zyFqC2jeWFVbBMidsodpc9R6ATH6lR2q3SIGI1YX_4J8XQ5-pDzt2zQjNEdkebiiUq6WJbKe79I20ZMLgD2XJhwsixEXec872IOiSavPsWq77XetEdCeLwrDTNAhojt1W","requestId": "abcd","timestamp": 0 }}
+ 		Obtained response {"correlationId": "80831c51-801548d0", "status": 9400, "errorMessage": "Bad request."}{"status": 9400, "correlationId": "39b23775-5f02568b", "errorMessage": "Bad request."}
+
+

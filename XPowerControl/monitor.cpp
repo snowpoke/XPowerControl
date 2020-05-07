@@ -13,6 +13,7 @@
 #include "wstring_transform.h"
 #include "settings.h"
 #include "http_requests.h"
+#include "logging.h"
 #include <assert.h>
 #include <iostream>
 #include <fstream>
@@ -29,6 +30,7 @@ using json = nlohmann::json;
 
 
 void load_powers(float& zones_t, float& tower_t, float& rainmaker_t, float& clams_t, const ModeInfo<float>& ranges_t, string SESSID_t) {
+	auto _logger = logging::get_logger(DEFAULT_LOG);
 
 	boost::gregorian::date utc_today(boost::gregorian::day_clock::universal_day());
 	string start_year = to_string(utc_today.year() - 2000);
@@ -87,8 +89,9 @@ void load_powers(float& zones_t, float& tower_t, float& rainmaker_t, float& clam
 			save_ranges(new_ranges);
 		}
 	}
-	catch (...) {
-		AfxMessageBox(L"Failed to load the X rank powers.");
+	catch (exception& e) {
+		_logger->error("Failed to load the current X rank powers. e.what() responded: {}\nJSON result: {}", e.what(), xpower_json_string);
+		AfxMessageBox(L"Failed to load the current X rank powers.");
 		AfxThrowUserException();
 	}
 }
@@ -98,6 +101,7 @@ void load_powers(ModeInfo<float>& powers_t, const ModeInfo<float>& ranges_t, str
 }
 
 void load_prev_match_info(int& start_time_t, float& power_after_t, string SESSID_t) {
+	auto _logger = logging::get_logger(DEFAULT_LOG);
 	string info_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/results", SESSID_t);
 	try {
 		json j = json::parse(info_json_string);
@@ -110,7 +114,9 @@ void load_prev_match_info(int& start_time_t, float& power_after_t, string SESSID
 		else
 			power_after_t = 0;
 	}
-	catch (...) {
+	catch (exception& e) {
+		_logger->error("Failed to load the information about the previous match. e.what() responded: {}\nJSON result: {}",
+			e.what(), info_json_string);
 		AfxMessageBox(L"Failed to load the information about the previous match.");
 		AfxThrowUserException();
 	}
@@ -124,6 +130,7 @@ void load_prev_match_info(int& start_time_t, string SESSID_t) {
 }
 
 Mode get_mode(string SESSID_t) {
+	auto _logger = logging::get_logger(DEFAULT_LOG);
 	string schedule_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/schedules", SESSID_t);
 	try {
 		json j = json::parse(schedule_json_string);
@@ -153,6 +160,8 @@ Mode get_mode(string SESSID_t) {
 		}
 
 		// return mode
+		_logger->info("Looked up mode and retrieved JSON result \"{}\"", rule);
+
 		if (rule == "splat_zones") {
 			return ZONES;
 		}
@@ -167,7 +176,8 @@ Mode get_mode(string SESSID_t) {
 		}
 
 	}
-	catch (...) {
+	catch (exception& e) {
+		_logger->error("Failed to load the current mode. e.what() responded: {}\nJSON content: {}", e.what(), schedule_json_string);
 		AfxMessageBox(L"Failed to load the current mode.");
 		AfxThrowUserException();
 		return ZONES;
@@ -186,6 +196,27 @@ void load_ranges(float& zones_range_t, float& tower_range_t, float& rainmaker_ra
 
 void load_ranges(ModeInfo<float>& ranges_t) {
 	load_ranges(ranges_t[Mode::ZONES], ranges_t[Mode::TOWER], ranges_t[Mode::RAINMAKER], ranges_t[Mode::CLAMS]);
+}
+
+std::string mode_to_string(Mode m)
+{
+	switch (m) {
+	case ZONES:
+		return "Splat Zones";
+		break;
+	case TOWER:
+		return "Tower Control";
+		break;
+	case RAINMAKER:
+		return "Rainmaker";
+		break;
+	case CLAMS:
+		return "Clam Blitz";
+		break;
+	default:
+		return "Mode not registered";
+		break;
+	}
 }
 
 void save_ranges(const float& zones_range_t, const float& tower_range_t, const float& rainmaker_range_t, const float& clams_range_t) {
@@ -354,6 +385,8 @@ void run_script_matchend() {
 }
 
 UINT monitor_main_alt(LPVOID pParam) {
+	logging::log_ptr _logger = logging::get_logger(DEFAULT_LOG);
+
 
 	CXPowerControlDlg* window = (CXPowerControlDlg*)pParam;
 
@@ -395,6 +428,7 @@ UINT monitor_main_alt(LPVOID pParam) {
 			if (powers[curr_mode] != powers_after_loss[curr_mode]) {
 				window->match_running = true;
 				run_script_matchstart();
+				_logger->info("Start of match has been detected.");
 				// number of points that would be lost after a defeat (contains negative sign)
 				float loss_distance = round2(powers[curr_mode] - powers_after_loss[curr_mode]);
 				// estimate of number of points that would be won after a victory
@@ -403,11 +437,11 @@ UINT monitor_main_alt(LPVOID pParam) {
 				// truncate numbers into the format used in Splatoon
 				float loss_trunc = power_truncate(-1*loss_distance, powers[curr_mode]);
 				float win_trunc = power_truncate(win_distance, powers[curr_mode]);
-				cout << "Current power:" << powers[curr_mode] << "/n";
-				cout << "Loss distance (float): " << loss_distance << "/n";
-				cout << "Loss distance (trunc): " << loss_trunc << "/n";
-				cout << "Win distance (float): " << win_distance << "/n";
-				cout << "Win distance (trunc): " << win_trunc << "/n/n/n";
+				_logger->info("Current power({}): {}", mode_to_string(curr_mode), powers[curr_mode]);
+				_logger->info("Loss distance (float): {}", loss_distance);
+				_logger->info("Loss distance (trunc): {}", loss_trunc);
+				_logger->info("Win distance (float): {}", win_distance);
+				_logger->info("Win distance (trunc): {}", win_trunc);
 				save_info(powers[curr_mode], win_trunc, loss_trunc, win_distance, loss_distance, window);
 			}
 		}
@@ -421,6 +455,9 @@ UINT monitor_main_alt(LPVOID pParam) {
 			if (prev_start_time != new_start_time) { // if a new starting time was found, this means the match has ended
 				window->match_running = false;
 				run_script_matchend();
+				_logger->info("End of match has been detected.");
+				_logger->info("Detected new power: {}", new_power);
+				_logger->info("Previous power(): {}", mode_to_string(curr_mode), powers[curr_mode]);
 				float power_change = new_power - powers[curr_mode];
 				powers[curr_mode] = new_power;
 
@@ -431,7 +468,9 @@ UINT monitor_main_alt(LPVOID pParam) {
 
 
 				if (power_change > 0) { // if we won the match, we can use this information to adjust the range
+					auto old_range = ranges[curr_mode];
 					ranges[curr_mode] = round2(new_power - powers_after_loss[curr_mode]);
+					_logger->info("Adjusted range in {} from {} to {}.", mode_to_string(curr_mode), old_range, ranges[curr_mode]);
 					save_ranges(ranges);
 				}
 
@@ -441,7 +480,7 @@ UINT monitor_main_alt(LPVOID pParam) {
 		}
 
 		// refreshes the UI: this shouldn't be necessary, but somehow is
-		if (invalidate_timer > 5000) {
+		if (invalidate_timer > 3000) {
 			window->Invalidate();
 			window->UpdateWindow();
 			invalidate_timer = 0;
@@ -453,170 +492,3 @@ UINT monitor_main_alt(LPVOID pParam) {
 
 	return 0;
 }
-/*
-UINT monitor_main(LPVOID pParam)
-{
-	cout << "-- PRE-RELEASE VERSION FOR SUBSCRIBERS ONLY --\n"
-		<< "VERSION X.X \n"
-		<< "This program is a very early version and is only available to subscribers of my twitch channel:\n"
-		<< "https://twitch.tv/snowpoke\n"
-		<< "If you obtained this program thorugh other means, please consider leaving a gift sub to my wonderful community.\n\n";
-
-	//cout << xpower_json_string.c_str();
-	float zones_pwr, tower_pwr, rainmaker_pwr, clams_pwr;
-	float zones_pwr_after, tower_pwr_after, rainmaker_pwr_after, clams_pwr_after;
-	int start_time;
-	float power_after_loss;
-	float power_after;
-	float power_before;
-	float loss_distance = 0;
-	float win_distance = 0;
-
-	CXPowerControlDlg* window = (CXPowerControlDlg*)pParam;
-
-	string SESSID = read_from_settings("iksm-session");
-
-
-	load_powers(zones_pwr, tower_pwr, rainmaker_pwr, clams_pwr, SESSID);
-
-	load_prev_match_info(start_time, power_after, SESSID);
-
-
-	Mode curr_mode = get_mode(SESSID);
-	float zones_range, tower_range, rainmaker_range, clams_range;
-	float* curr_range;
-
-	load_ranges(zones_range, tower_range, rainmaker_range, clams_range);
-
-	curr_range = &zones_range; // just so not all initializations of curr_range are in if clauses
-	if (curr_mode == ZONES) {
-		save_info(zones_pwr, window);
-		curr_range = &zones_range;
-	}
-	else if (curr_mode == TOWER) {
-		save_info(tower_pwr, window);
-		curr_range = &tower_range;
-	}
-	else if (curr_mode == RAINMAKER) {
-		save_info(rainmaker_pwr, window);
-		curr_range = &rainmaker_range;
-	}
-	else if (curr_mode == CLAMS) {
-		save_info(clams_pwr, window);
-		curr_range = &clams_range;
-	}
-
-	window->m_loading_info.ShowWindow(SW_HIDE); // remove the loading indicator
-	window->GetDlgItem(IDC_WINTEXT)->ShowWindow(SW_SHOW);
-	window->GetDlgItem(IDC_LOSETEXT)->ShowWindow(SW_SHOW);
-	window->GetDlgItem(IDC_BATTLE_START_TEXT)->ShowWindow(SW_SHOW);
-	cout << "Monitoring for start of a match...";
-
-	while (!window->kill_monitor_main) {
-		if (!window->match_running) {
-			if (window->update_rotation) {
-				load_ranges(zones_range, tower_range, rainmaker_range, clams_range);
-
-				curr_mode = get_mode(SESSID);
-				curr_range = &zones_range; // just so not all initializations of curr_range are in if clauses
-				if (curr_mode == ZONES) {
-					save_info(zones_pwr, window);
-					curr_range = &zones_range;
-				}
-				else if (curr_mode == TOWER) {
-					save_info(tower_pwr, window);
-					curr_range = &tower_range;
-				}
-				else if (curr_mode == RAINMAKER) {
-					save_info(rainmaker_pwr, window);
-					curr_range = &rainmaker_range;
-				}
-				else if (curr_mode == CLAMS) {
-					save_info(clams_pwr, window);
-					curr_range = &clams_range;
-				}
-				window->update_rotation = false;
-				continue;
-			}
-			// if there is no match running, check for changes in the x power
-			// once a power changes, we know that a match is running
-			load_powers(zones_pwr_after, tower_pwr_after, rainmaker_pwr_after, clams_pwr_after, SESSID);
-			float pwr_sum_old = round2(zones_pwr + tower_pwr + rainmaker_pwr + clams_pwr);
-			float pwr_sum = round2(zones_pwr_after + tower_pwr_after + rainmaker_pwr_after + clams_pwr_after);
-			if (pwr_sum_old != pwr_sum) {
-				cout << "A new match has started." << "\n";
-				window->match_running = true;
-				if (zones_pwr != zones_pwr_after) {
-					loss_distance = round2(zones_pwr - zones_pwr_after);
-					power_before = zones_pwr;
-					power_after_loss = zones_pwr_after;
-				}
-				else if (tower_pwr != tower_pwr_after) {
-					loss_distance = round2(tower_pwr - tower_pwr_after);
-					power_before = tower_pwr;
-					power_after_loss = tower_pwr_after;
-				}
-				else if (rainmaker_pwr != rainmaker_pwr_after) {
-					loss_distance = round2(rainmaker_pwr - rainmaker_pwr_after);
-					power_before = rainmaker_pwr;
-					power_after_loss = rainmaker_pwr_after;
-				}
-				else if (clams_pwr != clams_pwr_after) {
-					loss_distance = round2(clams_pwr - clams_pwr_after);
-					power_before = clams_pwr;
-					power_after_loss = clams_pwr_after;
-				}
-				win_distance = round2(*curr_range - loss_distance);
-				cout << "Current power: " << power_before << "\n";
-				cout << "Loss distance: -" << loss_distance << "\n";
-				cout << "Win distance: " << win_distance << "\n";
-
-				float power_trunc, loss_trunc, win_trunc;
-				power_trunc = trunc(power_before);
-				loss_trunc = power_trunc - trunc(power_before - loss_distance);
-				win_trunc = trunc(power_before + win_distance) - power_trunc;
-				save_info(power_before, win_trunc, loss_trunc, window);
-				cout << "Monitoring for end of the match...";
-			}
-
-		}
-		else {
-			// if there is a match running, we test for a new entry in the match list - this indicates that the match is over
-			int start_time_old = start_time;
-
-			load_prev_match_info(start_time, power_after, SESSID);
-			if (start_time != start_time_old) { // a new match has been stored
-				cout << "Match has ended." << "\n";
-				window->match_running = false;
-				// if we won the match, we can use this to adjust the range
-				float range_old = *curr_range;
-				float power_change = power_after - power_before;
-
-				args_analytics args = { window->analytics, SESSID, win_distance, range_old, power_change };
-				AfxBeginThread(add_recent_match_analytics, &args);
-
-				if (power_change > 0) {
-					*curr_range = round2(power_after - power_after_loss);
-					cout << "New range: " << *curr_range << "\n";
-					if (range_old != *curr_range) {
-						cout << "Adjusted range by " << *curr_range - range_old << "\n";
-						save_ranges(zones_range, tower_range, rainmaker_range, clams_range);
-
-					}
-				}
-
-				cout << "\n----------\n";
-				load_powers(zones_pwr, tower_pwr, rainmaker_pwr, clams_pwr, SESSID); // update all powers
-				loss_distance = 0;
-				win_distance = 0;
-				save_info(power_after, window);
-
-				cout << "Monitoring for start of a match...";
-			}
-
-		}
-		Sleep(1000);
-	}
-	return 0;
-}
-*/

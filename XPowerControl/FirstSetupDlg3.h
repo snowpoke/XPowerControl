@@ -1,6 +1,7 @@
 #pragma once
-#include "resource.h"
 #include <afxdialogex.h>
+#include "resource.h"
+#include "logging.h"
 #include <optional>
 #include <string>
 
@@ -44,4 +45,6 @@ public:
 	CButton button_ok;
 	afx_msg void OnBnClickedOk();
 	afx_msg void OnBnClickedCancel();
+private:
+	logging::log_ptr _logger;
 };

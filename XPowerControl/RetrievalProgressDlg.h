@@ -1,6 +1,7 @@
 #pragma once
 #include "resource.h"
 #include "TokenRetriever.h"
+#include "logging.h"
 #include <afxdialogex.h>
 #include <optional>
 
@@ -10,11 +11,13 @@
 class RetrievalProgressDlg : public CDialogEx
 {
 	DECLARE_DYNAMIC(RetrievalProgressDlg)
-
+private:
+	logging::log_ptr _logger;
 public:
 	RetrievalProgressDlg(CWnd* pParent = nullptr);   // standard constructor
 	virtual ~RetrievalProgressDlg();
 	virtual BOOL OnInitDialog();
+	void install_validity_check();
 	bool no_closing_after_success; // if this is set to true, the dialog will not close on its own after finishing
 	bool require_login = false;
 	bool has_succeeded = false; // is true when iksm token is retrieved and saved

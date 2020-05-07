@@ -2,10 +2,10 @@
 //
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include "afxdialogex.h"
 #include "FirstSetupDlg4.h"
 #include "FirstSetup.h"
 #include "RetrievalProgressDlg.h"
-#include "afxdialogex.h"
 #include "bit7zlibrary.hpp"
 #include "bitextractor.hpp"
 #include "bitformat.hpp"
@@ -38,7 +38,7 @@ IMPLEMENT_DYNAMIC(FirstSetupDlg4, CDialogEx)
 FirstSetupDlg4::FirstSetupDlg4(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_FIRSTSETUP4, pParent)
 {
-
+	_logger = logging::get_logger(DEFAULT_LOG);
 }
 
 FirstSetupDlg4::~FirstSetupDlg4()
@@ -119,6 +119,9 @@ BOOL FirstSetupDlg4::OnInitDialog()
 	out_file << j;
 	out_file.close();
 
+	_logger->info("New settings value for emu_cmd: {}", j["emu_cmd"]);
+	_logger->info("New settings value for emu_exec: {}", j["emu_exec"]);
+	_logger->info("New settings value for mitm_exec: {}", j["mitm_exec"]);
 	
 
 	return 0;
@@ -127,6 +130,8 @@ BOOL FirstSetupDlg4::OnInitDialog()
 
 void FirstSetupDlg4::OnBnClickedButton1()
 {
+
+	_logger->info("Initiating token retrieval.");
 	RetrievalProgressDlg dlg;
 	dlg.require_login = true;
 	dlg.DoModal();
@@ -140,6 +145,7 @@ void FirstSetupDlg4::OnBnClickedButton1()
 		string splatnet_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/records",
 			j["iksm-session"]);
 		if (splatnet_string.find("AUTHENTICATION_ERROR") == std::string::npos) { // if returned data doesn't contain "AUTHENTICATION ERROR"
+			_logger->info("User authentification successful. Setting performed_setup flag in settings file.");
 			nlohmann::json j = nlohmann::json::parse(splatnet_string);
 			string nickname = j["records"]["player"]["nickname"];
 			CString welcome = _T("Valid Token! Welcome, ");

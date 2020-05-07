@@ -9,6 +9,7 @@
 #include "wstring_transform.h"
 #include "RetrievalProgressDlg.h"
 #include "SetupRetrievalDlg.h"
+#include "UpdateNSODlg.h"
 #include <regex>
 
 using namespace std;
@@ -70,6 +71,7 @@ BEGIN_MESSAGE_MAP(CSettingsDialog, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON7, &CSettingsDialog::OnBnClickedButton7)
 	ON_WM_NCDESTROY()
 	ON_WM_SETCURSOR()
+	ON_BN_CLICKED(IDC_TEST_NSOUPDATE, &CSettingsDialog::OnBnClickedTestNsoupdate)
 END_MESSAGE_MAP()
 
 
@@ -455,4 +457,11 @@ BOOL CSettingsDialog::OnSetCursor(CWnd* pWnd, UINT nHitTest, UINT message)
 	}
 
 	return CDialogEx::OnSetCursor(pWnd, nHitTest, message);
+}
+
+
+void CSettingsDialog::OnBnClickedTestNsoupdate()
+{
+	UpdateNSODlg dlg;
+	dlg.DoModal();
 }

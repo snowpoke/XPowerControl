@@ -1,8 +1,9 @@
 #pragma once
-#include "resource.h"
 #include <afxdialogex.h>
+#include "resource.h"
 #include <optional>
 #include "Version.h"
+#include "logging.h"
 
 // FirstSetupDlg dialog
 
@@ -34,4 +35,6 @@ public:
 	CWinThread* update_info_monitor;
 	afx_msg void OnStnClickedStaticInsufficientStorage();
 	afx_msg void OnBnClickedButton1();
+private:
+	logging::log_ptr _logger;
 };

@@ -2,15 +2,14 @@
 //
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
+#include "afxdialogex.h"
 #include "FirstSetupDlg2.h"
 #include "FirstSetupDlg3.h"
 #include "FirstSetupDlg4.h"
 #include "FirstSetup.h"
-#include "afxdialogex.h"
 #include "wstring_transform.h"
 #include <memory>
 #include <iostream>
-#include <Windows.h>
 #include <string>
 #include <cstring>      ///< memset
 #include <errno.h>      ///< errno
@@ -31,88 +30,23 @@
 #include <assert.h>
 #include <shlobj.h>
 #include <iterator>
+#include <functional>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "urlmon.lib")
 
 #define MITM_URL L"https://snapshots.mitmproxy.org/5.0.1/mitmproxy-5.0.1-windows-installer.exe"
-#define BS_URL L"https://cloud.bluestacks.com/get_offline_download?os_arch=x64"
+#define BS_URL L"https://github.com/snowpoke/XPowerControl-public/raw/master/BlueStacksInstaller_4.170.10.1001_native_0c445ef78c8d14e4e7207acac4a08169.exe"
 #define VMACHINE1_URLSTEM L"https://github.com/snowpoke/XPowerControl-public/raw/master/" /* file name has to be added dynamically */
 #define VMACHINE2_URL L"https://github.com/snowpoke/XPowerControl-public/raw/master/vmachine.7z.002"
 #define VMACHINE_PART1 L"https://github.com/snowpoke/XPowerControl-public/raw/master/Root.7z.001"
 #define VMACHINE_PART2 L"https://github.com/snowpoke/XPowerControl-public/raw/master/Root.7z.002"
 #define VMACHINE_PART3 L"https://github.com/snowpoke/XPowerControl-public/raw/master/Root.7z.003"
 #define VMACHINE_PART4 L"https://github.com/snowpoke/XPowerControl-public/raw/master/Root.7z.004"
-#define NSO_URL L"https://www.apkmirror.com/wp-content/themes/APKMirror/download.php?id=901009"
 
 
 using namespace std;
 typedef unsigned char byte_t;
-
-// our implementation of the IBindStatusCallback interface
-
-	HRESULT Callback::GetBindInfo(DWORD* grfBINDF, BINDINFO* pbindinfo) {
-		cout << "Called GetBindInfo";
-
-		return S_OK;
-	}
-
-	HRESULT Callback::GetPriority(long* pnPriority) {
-		cout << "Called GetPriority";
-
-		return S_OK;
-	}
-
-	HRESULT Callback::OnDataAvailable(DWORD grfBSCF, DWORD dwSize, FORMATETC* pformatetc, STGMEDIUM* pstgmed) {
-		cout << "Called OnDataAvailable";
-
-		return S_OK;
-	}
-
-	HRESULT Callback::OnLowResource(DWORD dwReserved) {
-		cout << "Called OnLowResource";
-
-		return S_OK;
-	}
-
-	HRESULT Callback::OnObjectAvailable(REFIID riid, IUnknown* punk) {
-		cout << "Called OnObjectAvailable";
-
-		return S_OK;
-	}
-
-	HRESULT Callback::OnProgress(unsigned long ulProgress, unsigned long ulProgressMax,
-		unsigned long ulStatusCode, LPCWSTR szStatusText) {
-		cout << "Called OnProgress\n"
-			<< "\tulProgress: " << ulProgress << "\n"
-			<< "\tulProgressMax: " << ulProgressMax << "\n"
-			<< "\tulStatusCode: " << ulStatusCode << "\n"
-			<< "\tszStatusText" << szStatusText;
-
-		progress = ulProgress;
-		max_dl = ulProgressMax;
-		status_code = ulStatusCode;
-		dlg->send_message(MSG_UPDATE_DL_PROGRESS);
-
-		return S_OK;
-	}
-
-	HRESULT Callback::OnStartBinding(DWORD dwReserved, IBinding* pib) {
-		cout << "Called OnStartBinding";
-
-		return S_OK;
-	}
-
-	HRESULT Callback::OnStopBinding(HRESULT hresult, LPCWSTR szError) {
-		cout << "Called OnStopBinding";
-		finished = true;
-		dlg->send_message(MSG_UPDATE_DL_PROGRESS);
-		return S_OK;
-	}
-
-	HRESULT Callback::QueryInterface(REFIID riid, void** ppvObject) {
-		return S_OK;
-	}
 
 // FirstSetupDlg2 dialog
 IMPLEMENT_DYNAMIC(FirstSetupDlg2, CDialogEx)
@@ -226,10 +160,12 @@ UINT inject_ip_thread(LPVOID pParam) {
 
 
 FirstSetupDlg2::FirstSetupDlg2(bool needs_bs_t, bool needs_mitm_t, CWnd* pParent /*=nullptr*/)
-	: CDialogEx(IDD_FIRSTSETUP2, pParent)
+	: CustomDialogBase(IDD_FIRSTSETUP2, pParent)
 {
 	needs_bs = needs_bs_t;
 	needs_mitm = needs_mitm_t;
+	register_message_mapping(MSG_UPDATE_DL_PROGRESS, (std::function<void(void*)>) on_update_dl_progress_wrapper);
+	_logger = logging::get_logger(DEFAULT_LOG);
 }
 
 FirstSetupDlg2::~FirstSetupDlg2()
@@ -242,7 +178,7 @@ void FirstSetupDlg2::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_PROGRESS_DL, progress_dl);
 }
 
-
+/* legacy message listener
 UINT FirstSetupDlg2::message_listener(LPVOID pParam) {
 	FirstSetupDlg2* dlg = (FirstSetupDlg2*)pParam;
 	while (dlg->message != MSG_STOP_LISTENER) {
@@ -257,24 +193,12 @@ UINT FirstSetupDlg2::message_listener(LPVOID pParam) {
 	}
 
 	return 0;
-}
+}*/
 
 BEGIN_MESSAGE_MAP(FirstSetupDlg2, CDialogEx)
 	ON_BN_CLICKED(IDOK, &FirstSetupDlg2::OnBnClickedOk)
 	ON_BN_CLICKED(IDCANCEL, &FirstSetupDlg2::OnBnClickedCancel)
 END_MESSAGE_MAP()
-
-UINT thread_download_file(LPVOID pParam) {
-	DownloadParam* dl_param = (DownloadParam*)pParam;
-
-	URLDownloadToFile(NULL,
-		dl_param->dl_URL,
-		(dl_param->savepath_t).c_str(),
-		0,
-		dl_param->callback_t);
-
-	return 0;
-}
 
 // FirstSetupDlg2 message handlers
 BOOL FirstSetupDlg2::OnInitDialog() {
@@ -287,17 +211,17 @@ BOOL FirstSetupDlg2::OnInitDialog() {
 	string local_ip = FirstSetup::get_local_ip();
 	wstring savepath = L"./";
 
-	mitm_callback = Callback(this);
-	bs_callback = Callback(this);
-	nso_callback = Callback(this);
-	vmachine_callback = { Callback(this), Callback(this), Callback(this), Callback(this) };
+	mitm_callback = http_requests::Callback(this);
+	bs_callback = http_requests::Callback(this);
+	nso_callback = http_requests::Callback(this);
+	vmachine_callback = { http_requests::Callback(this), http_requests::Callback(this), http_requests::Callback(this), http_requests::Callback(this) };
 
 	winthread_message_listener = AfxBeginThread(message_listener, this);
 
 	// load mitmproxy if neccessary
 	if (needs_mitm) {
 		DeleteFile(L"installer_mitmproxy.exe");
-		AfxBeginThread(thread_download_file, new DownloadParam{ MITM_URL, L"installer_mitmproxy.exe", &mitm_callback });
+		AfxBeginThread(http_requests::thread_download_file, new http_requests::DownloadParam{ MITM_URL, L"installer_mitmproxy.exe", &mitm_callback });
 	}
 	else {
 		GetDlgItem(IDC_STATIC_MITM_PROGRESS)->SetWindowText(L"Installed");
@@ -306,7 +230,7 @@ BOOL FirstSetupDlg2::OnInitDialog() {
 	// load nox if neccessary
 	if (needs_bs) {
 		DeleteFile(L"installer_bs.exe");
-		AfxBeginThread(thread_download_file, new DownloadParam{ BS_URL, L"installer_bs.exe", &bs_callback });
+		AfxBeginThread(http_requests::thread_download_file, new http_requests::DownloadParam{ BS_URL, L"installer_bs.exe", &bs_callback });
 	}
 	else {
 		GetDlgItem(IDC_STATIC_NOX_PROGRESS)->SetWindowText(L"Installed");
@@ -316,17 +240,18 @@ BOOL FirstSetupDlg2::OnInitDialog() {
 	DeleteFile(L"Root.7z.002");
 	DeleteFile(L"Root.7z.003");
 	DeleteFile(L"Root.7z.004");
-	vmachine_dl_param[0] = DownloadParam{ VMACHINE_PART1, L"Root.7z.001", &vmachine_callback[0] };
-	vmachine_dl_param[1] = DownloadParam{ VMACHINE_PART2, L"Root.7z.002", &vmachine_callback[1] };
-	vmachine_dl_param[2] = DownloadParam{ VMACHINE_PART3, L"Root.7z.003", &vmachine_callback[2] };
-	vmachine_dl_param[3] = DownloadParam{ VMACHINE_PART4, L"Root.7z.004", &vmachine_callback[3] };
-	AfxBeginThread(thread_download_file, &vmachine_dl_param[0]);
-	AfxBeginThread(thread_download_file, &vmachine_dl_param[1]);
-	AfxBeginThread(thread_download_file, &vmachine_dl_param[2]);
-	AfxBeginThread(thread_download_file, &vmachine_dl_param[3]);
+	vmachine_dl_param[0] = http_requests::DownloadParam{ VMACHINE_PART1, L"Root.7z.001", &vmachine_callback[0] };
+	vmachine_dl_param[1] = http_requests::DownloadParam{ VMACHINE_PART2, L"Root.7z.002", &vmachine_callback[1] };
+	vmachine_dl_param[2] = http_requests::DownloadParam{ VMACHINE_PART3, L"Root.7z.003", &vmachine_callback[2] };
+	vmachine_dl_param[3] = http_requests::DownloadParam{ VMACHINE_PART4, L"Root.7z.004", &vmachine_callback[3] };
+	AfxBeginThread(http_requests::thread_download_file, &vmachine_dl_param[0]);
+	AfxBeginThread(http_requests::thread_download_file, &vmachine_dl_param[1]);
+	AfxBeginThread(http_requests::thread_download_file, &vmachine_dl_param[2]);
+	AfxBeginThread(http_requests::thread_download_file, &vmachine_dl_param[3]);
 
 	DeleteFile(L"nso.apk");
-	AfxBeginThread(thread_download_file, new DownloadParam{ NSO_URL, L"nso.apk", &nso_callback });
+	AfxBeginThread(http_requests::thread_download_file,
+		new http_requests::DownloadParam{ transform::s2ws(http_requests::get_global_info("nso_dl_link")), L"nso.apk", &nso_callback });
 
 	return true;
 }
@@ -339,16 +264,22 @@ unsigned long get_file_size(ifstream& file) {
 	return length;
 }
 
+void FirstSetupDlg2::on_update_dl_progress_wrapper(void* pParam) { // this lets us use a static function in the message handling system without making on_update_dl_progress too messy
+	FirstSetupDlg2* dlg = (FirstSetupDlg2*)pParam;
+	dlg->on_update_dl_progress();
+}
+
+
 void FirstSetupDlg2::on_update_dl_progress() {
 	array<long, 4> vmachine_callback_progress_arr, vmachine_callback_max_arr;
 	long vmachine_callback_progress = std::accumulate(vmachine_callback.begin(),
 		vmachine_callback.end(),
 		0,
-		[](long v, Callback& c) {return v + c.progress; });
+		[](long v, http_requests::Callback& c) {return v + c.progress; });
 	long vmachine_callback_max = std::accumulate(vmachine_callback.begin(),
 		vmachine_callback.end(),
 		0,
-		[](long v, Callback& c) {return v + c.max_dl; });
+		[](long v, http_requests::Callback& c) {return v + c.max_dl; });
 	long dl_progress_sum = mitm_callback.progress + bs_callback.progress + vmachine_callback_progress + nso_callback.progress;
 	long dl_max_sum = mitm_callback.max_dl + bs_callback.max_dl + vmachine_callback_max + nso_callback.max_dl;
 	bool dl_finished = true;
@@ -389,7 +320,7 @@ void FirstSetupDlg2::on_update_dl_progress() {
 	dl_finished = std::accumulate(vmachine_callback.begin(),
 		vmachine_callback.end(),
 		dl_finished,
-		[](bool a, Callback& b) {return a && b.finished; }); // dl_finished = dl_finished && vmachine_callback[0].finished && ...
+		[](bool a, http_requests::Callback& b) {return a && b.finished; }); // dl_finished = dl_finished && vmachine_callback[0].finished && ...
 
 	string nso_progress_mb = (mb_format % (static_cast<long double>(nso_callback.progress) / 1000000.0)).str();
 	string nso_max_mb = (mb_format % (static_cast<long double>(nso_callback.max_dl) / 1000000.0)).str();
@@ -399,6 +330,7 @@ void FirstSetupDlg2::on_update_dl_progress() {
 
 	if (dl_finished) {
 		// merge vmachine parts
+		_logger->info("Downloads have finished. Restoring virtual machine archive.");
 		GetDlgItem(IDC_STATIC_STATUS)->SetWindowTextW(L"Restoring virtual machine archive...");
 		array<ifstream, 4> vmachine_parts = { ifstream("Root.7z.001", ios::in | ios::binary),
 			ifstream("Root.7z.002", ios::in | ios::binary),
@@ -422,6 +354,7 @@ void FirstSetupDlg2::on_update_dl_progress() {
 
 		progress_dl.SetPos(0);
 		GetDlgItem(IDC_STATIC_STATUS)->SetWindowTextW(L"Extracting virtual machine archive...");
+		_logger->info("Extracting virtual machine archive");
 		try {
 			bit7z::Bit7zLibrary lib{ L"7zxa.dll" };
 			bit7z::BitMemExtractor extractor{ lib, bit7z::BitFormat::SevenZip };
@@ -480,7 +413,7 @@ void FirstSetupDlg2::OnBnClickedCancel()
 		send_message(MSG_STOP_LISTENER);
 		WaitForSingleObject(winthread_message_listener->m_hThread, 1000);
 		FirstSetup::cleanup();
-		CDialogEx::OnCancel();
+		CustomDialogBase::OnCancel();
 		PostQuitMessage(0);
 	}
 }

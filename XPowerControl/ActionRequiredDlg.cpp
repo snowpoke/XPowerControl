@@ -33,7 +33,6 @@ void ActionRequiredDlg::DoDataExchange(CDataExchange* pDX)
 
 
 BEGIN_MESSAGE_MAP(ActionRequiredDlg, CDialogEx)
-	ON_STN_CLICKED(IDC_STATIC_PICTURE, &ActionRequiredDlg::OnStnClickedStaticPicture)
 END_MESSAGE_MAP()
 
 
@@ -74,10 +73,4 @@ BOOL ActionRequiredDlg::OnInitDialog()
 
 
 	return 0;
-}
-
-
-void ActionRequiredDlg::OnStnClickedStaticPicture()
-{
-	// TODO: Add your control notification handler code here
 }

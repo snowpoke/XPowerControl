@@ -13,6 +13,7 @@
 #include "http_requests.h"
 #include "nlohmann/json.hpp"
 #include "ActionRequiredDlg.h"
+#include "logging.h"
 
 #define REGISTRY_PATH  L"SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall"
 #define GIGABYTE (unsigned __int64) 1000000000
@@ -25,7 +26,7 @@ IMPLEMENT_DYNAMIC(FirstSetupDlg, CDialogEx)
 FirstSetupDlg::FirstSetupDlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_FIRSTSETUP, pParent)
 {
-
+	_logger = logging::get_logger(DEFAULT_LOG);
 }
 
 FirstSetupDlg::~FirstSetupDlg()
@@ -140,6 +141,9 @@ BOOL FirstSetupDlg::OnInitDialog()
 
 	if (this_ver < latest_ver) {
 		update_info_monitor = AfxBeginThread(thread_update_info_setup, this);
+		_logger->warn("User is running outdated version. Current version: {} - Latest version: {}",
+			transform::ws2s(this_ver.to_wstring(4)),
+			transform::ws2s(latest_ver.to_wstring(4)));
 	}
 
 	// get free space on current drive
@@ -168,6 +172,7 @@ BOOL FirstSetupDlg::OnInitDialog()
 			GetDlgItem(IDC_STATIC_INSUFFICIENT_STORAGE)->SetWindowText((L"Error! You don't have enough disk space to set up this program.\n\
 To install helper software, you will need 4.5GB on drive " + this_program_drive + L".\n\
 (2GB temporary installer files + 2.5GB permanent installations)").c_str());
+			_logger->error("User does not have sufficient storage. (Drives for Program Files and Program Data are identical)");
 			GetDlgItem(IDC_STATIC_INSUFFICIENT_STORAGE)->ShowWindow(SW_SHOWNORMAL);
 			GetDlgItem(IDOK)->EnableWindow(false);
 		}
@@ -181,6 +186,7 @@ To install helper software, you will need 4.5GB on drive " + this_program_drive 
 			GetDlgItem(IDC_STATIC_INSUFFICIENT_STORAGE)->SetWindowText((L"Error! You don't have enough disk space to set up this program.\n\
 To install helper software, you will need 2GB on drive " + this_program_drive + L" for temporary files\n\
 and 2.5GB of space on drive " + program_files_drive + L" for permanent installations").c_str());
+			_logger->error("User does not have sufficient storage. (Drives for Program Files and Program Data are NOT identical)");
 			GetDlgItem(IDC_STATIC_INSUFFICIENT_STORAGE)->ShowWindow(SW_SHOWNORMAL);
 			GetDlgItem(IDOK)->EnableWindow(false);
 		}
@@ -233,13 +239,31 @@ and 2.5GB of space on drive " + program_files_drive + L" for permanent installat
 		GetDlgItem(IDC_STATIC_NOTE)->ShowWindow(SW_SHOW);
 	}
 	
+	if (bs_version_str)
+		_logger->info("A previous installation for BlueStacks has been found.");
+	else
+		_logger->info("No previous installation for BlueStacks has been found.");
+
+	if (mitm_version_str)
+		_logger->info("A prevous installation for MITM has been found.");
+	else
+		_logger->info("No previous installation for MITM has been found.");
+
 	// if BlueStacks is already installed we check the BlueStacks version to see if we need to update
 	if (bs_version_str) {
 
 		Version bs_version = Version::from_string(transform::ws2s(wstring(*bs_version_str)));
 		Version bs_min_version = Version::from_int(4, 170, 10, 1001);
 		
+		_logger->info("The following version of BlueStacks has been detected: {}", transform::ws2s(bs_version.to_wstring(4)));
+
 		needs_bs = (bs_min_version > bs_version);
+
+		if (bs_version > bs_min_version) { // it seems like updates after 4.170.10.1001 break the proxy, so we display a warning if the user is on a later version
+			MessageBox(L"Your BlueStacks version is newer than Version 4.170.10.1001 that this program was developed for.\
+It is recommended that you uninstall Bluestacks and install it through woomyDX to be on the recommended version.");
+			_logger->warn("User is on newer BlueStacks version than recommended.");
+		}
 	}
 	
 	// if mitmproxy is installed, we don't need to update in any case

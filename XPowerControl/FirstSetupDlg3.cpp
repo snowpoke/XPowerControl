@@ -1,11 +1,11 @@
 // FirstSetupDlg3.cpp : implementation file
 //
 
-#include "FirstSetupDlg2.h"
+#include "afxdialogex.h"
 #include "FirstSetupDlg3.h"
+#include "FirstSetupDlg2.h"
 #include "FirstSetupDlg4.h"
 #include "TokenRetriever.h"
-#include "afxdialogex.h"
 #include "wstring_transform.h"
 #include <string>
 #include <optional>
@@ -32,6 +32,7 @@ FirstSetupDlg3::FirstSetupDlg3(optional<string> bs_file_t,
 	CWnd* pParent) : CDialogEx(IDD_FIRSTSETUP3, pParent) {
 	bs_file = bs_file_t;
 	mitm_file = mitm_file_t;
+	_logger = logging::get_logger(DEFAULT_LOG);
 }
 
 FirstSetupDlg3::~FirstSetupDlg3()
@@ -97,25 +98,30 @@ UINT FirstSetupDlg3::thread_installation_checker(LPVOID pParam) {
 
 		if (installed_bs) {
 			dlg->GetDlgItem(IDC_BUTTON_INSTALL_NOX)->EnableWindow(false);
-			if (dlg->bs_handle) { // close nox if it has been installed through this program
+			dlg->_logger->info("BlueStacks installation found.");
+			if (dlg->bs_handle) { // close BS if it has been installed through this program
 				Sleep(300); // wait a bit for final files to transfer
 				CloseHandle(dlg->bs_handle.value());
 				dlg->bs_handle = optional<HANDLE>(); // reset optional to false so this doesn't get called again
 			}
 			if (dlg->bs_file && !transferred_image) { // if this program just got installed, transfer android system image
 				dlg->GetDlgItem(IDC_STATIC_NOX)->SetWindowText(L"BlueStacks installation has been found - transferring data...");
+				dlg->_logger->info("Transferring android image data...");
 				block_ok = true; // don't give access to ok button while this is running
 				FirstSetup::setup_bs(dlg->GetDlgItem(IDC_STATIC_NOX));
 
 				transferred_image = true;
 				block_ok = false;
 				dlg->GetDlgItem(IDC_STATIC_NOX)->SetWindowText(L"BlueStacks installation has been found - data transferred!");
+				dlg->_logger->info("Android image successfully transferred.");
+
 			}
 		}
 
 		if (installed_mitm) {
 			dlg->GetDlgItem(IDC_BUTTON_INSTALL_MITM)->EnableWindow(false);
 			dlg->GetDlgItem(IDC_STATIC_MITM)->SetWindowText(L"Mitm installation has been found!");
+			dlg->_logger->info("Mitm installation found.");
 			if (dlg->mitm_handle) { // close mitm if it has been installed through this program
 				Sleep(800); // wait a bit for final files to transfer
 				CloseHandle(dlg->mitm_handle.value());
@@ -159,6 +165,7 @@ BOOL FirstSetupDlg3::OnInitDialog()
 
 void FirstSetupDlg3::OnBnClickedButtonInstallNox()
 {
+	_logger->info("Initiating BlueStacks installation.");
 	bs_handle = TokenRetriever::run_command(transform::s2ws(*bs_file));
 	Sleep(1000);
 	ActionRequiredDlg("media/bluestacks_install_comp.png",
@@ -169,6 +176,7 @@ void FirstSetupDlg3::OnBnClickedButtonInstallNox()
 
 void FirstSetupDlg3::OnBnClickedButtonInstallMitm()
 {
+	_logger->info("Initiating MITM installation.");
 	mitm_handle = TokenRetriever::run_command(transform::s2ws(*mitm_file));
 	Sleep(1000);
 	ActionRequiredDlg("media/mitm_install_comp.png",

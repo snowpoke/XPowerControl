@@ -78,4 +78,5 @@ public:
 	afx_msg BOOL OnSetCursor(CWnd* pWnd, UINT nHitTest, UINT message);
 	HCURSOR cursor_hand;
 	HCURSOR cursor_arrow;
+	afx_msg void OnBnClickedTestNsoupdate();
 };

@@ -27,6 +27,7 @@ void load_prev_match_info(int& start_time_t, std::string SESSID_t);
 Mode get_mode(std::string SESSID_t);
 void load_ranges(float& zones_range_t, float& tower_range_t, float& rainmaker_range_t, float& clams_range_t);
 void load_ranges(ModeInfo<float>& ranges);
+std::string mode_to_string(Mode m);
 
 // saves ranges into text files and sends them to the dialog
 void save_ranges(const float& zones_range_t, const float& tower_range_t, const float& rainmaker_range_t, const float& clams_range_t);

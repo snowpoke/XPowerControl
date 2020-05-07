@@ -1,6 +1,7 @@
 #pragma once
-#include "resource.h"
 #include <afxdialogex.h>
+#include "resource.h"
+#include "logging.h"
 #include <string>
 
 
@@ -28,4 +29,6 @@ public:
 	CProgressCtrl progress_prepare;
 	afx_msg void OnBnClickedButton1();
 	afx_msg void OnBnClickedCancel();
+private:
+	logging::log_ptr _logger;
 };

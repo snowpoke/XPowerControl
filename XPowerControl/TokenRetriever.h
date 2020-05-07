@@ -2,6 +2,7 @@
 #include <string>
 #include "resource.h"
 #include <afxdialogex.h>
+#include "logging.h"
 
 
 #pragma once
@@ -16,12 +17,10 @@ public:
 	std::wstring emu_command;
 
 	// constructor
-	TokenRetriever(std::optional<CWnd*> status_element_t, std::optional<CButton*> ok_button_t, std::wstring mitm_exec_t, std::wstring emu_command_t)
-		: status_element(status_element_t), ok_button(ok_button_t), mitm_exec(mitm_exec_t), emu_command(emu_command_t) {}
+	TokenRetriever(std::optional<CWnd*> status_element_t, std::optional<CButton*> ok_button_t, std::wstring mitm_exec_t, std::wstring emu_command_t);
+	TokenRetriever();
 
-	TokenRetriever() : status_element({}), ok_button({}), mitm_exec(L""), emu_command(L"") {}
-
-	static HANDLE run_command(std::wstring command_t);
+	static HANDLE run_command(std::wstring command_t, LPCWSTR current_directory_t = NULL, DWORD creation_flags_t = 0);
 	void mitm_start();
 	void emu_start();
 	std::wstring access_token_to_iksm(std::string access_token_t);
@@ -37,5 +36,6 @@ private:
 	std::string remove_multi_response(std::string buffer_t);
 	int progress_percent = 0;
 	std::optional<std::string> iksm_token;
+	logging::log_ptr _logger;
 };
 
