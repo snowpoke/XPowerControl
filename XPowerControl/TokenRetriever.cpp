@@ -197,7 +197,7 @@ void TokenRetriever::mitm_start() {
 	// delete files that contain results from previous mitmdump processes
 	DeleteFile(L"authorization.txt");
 	DeleteFile(L"registration_token.txt");
-
+	DeleteFile(L"iksm_cookie.txt");
 	// get full path for mitm_script.py
 	wchar_t buffer[MAX_PATH];
 	GetModuleFileName(NULL, buffer, MAX_PATH); // saves path of current executable in buffer
@@ -497,19 +497,34 @@ UINT TokenRetriever::token_listener(LPVOID pParam) { // checks if token file exi
 			ActionRequiredDlg("media/splatoon2_option.png",
 				L"Please select the \"Splatoon 2\" option.");
 			while (!token_retriever->kill_token_listener) {
-				if (boost::filesystem::exists("iksm_session.txt")) {
-					ifstream file("iksm_session.txt");
-					string iksm_token_temp;
-					file >> iksm_token_temp;
-					token_retriever->iksm_token = iksm_token_temp;
+				if (boost::filesystem::exists("iksm_cookie.txt")) {
+					// the text file describes the cookie that contains the iksm_session parameter
+					ifstream file("iksm_cookie.txt");
+					string iksm_cookie = string(istreambuf_iterator<char>(file), istreambuf_iterator<char>());
 					file.close();
-					token_retriever->_logger->info("File 'iksm_session.txt' has been found. Content of the file:\n{}", iksm_token_temp);
-					if (*token_retriever->iksm_token == "")
+					token_retriever->_logger->info("File 'iksm_cookie.txt' has been found. Content of the file:\n{}", iksm_cookie);
+
+					if (iksm_cookie == "") // if the file is read as empty, retry
 						continue;
-					else {
-						DeleteFile(L"iksm_session.txt");
-						break;
+
+					const string SESSION_KEY = "iksm_session=";
+					if (iksm_cookie.find(SESSION_KEY) == string::npos) { // check if the term was even found at all
+						token_retriever->_logger->info("The key for the iksm session (\"{}\") parameter could not be found within the file.", SESSION_KEY);
+						AfxMessageBox(L"The retrieved information is invalid. Please refer to the logs or contact the developer for help.");
+						AfxThrowUserException();
 					}
+
+					size_t iksm_position = iksm_cookie.find(SESSION_KEY) + SESSION_KEY.length(); // points to the first character after SESSION_KEY
+					token_retriever->iksm_token = iksm_cookie.substr(iksm_position, 40);
+					token_retriever->_logger->info("Retrieved token: {}", *(token_retriever->iksm_token));
+					if (token_retriever->iksm_token->length() < 40 // token needs to have 40 characters
+						|| any_of(token_retriever->iksm_token->begin(), token_retriever->iksm_token->end(), [](char c) {return !isalnum(c); })) { // token only contains alphanumerical characters
+						token_retriever->_logger->warn("Retrieved token seems to have an invalid shape.");
+						AfxMessageBox(L"The retrieved token seems malformed and might not work as intended.");
+					}
+
+					DeleteFile(L"iksm_cookie.txt");
+					break;
 				}
 			}
 			if (token_retriever->kill_token_listener)

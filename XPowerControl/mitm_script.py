@@ -14,9 +14,8 @@ def response(flow):
         file.write(content)
         file.close()
     if "app.splatoon2.nintendo.net/api/records" in flow.request.url:
-        file = open("iksm_session.txt","w")
+        file = open("iksm_cookie.txt","w")
         cookie = flow.request.headers['cookie']
-        token = cookie[13:53]
-        file.write(token)
+        file.write(cookie)
         file.close()
         

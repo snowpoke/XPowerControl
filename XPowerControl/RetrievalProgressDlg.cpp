@@ -267,7 +267,7 @@ void RetrievalProgressDlg::install_validity_check()
 
 
 	// check mitm python script
-	WIN32_FILE_ATTRIBUTE_DATA SCRIPTINFO{ 0, {1220656956, 30744796}, {0, 0}, {1445460535, 30801432}, 0, 821 };
+	WIN32_FILE_ATTRIBUTE_DATA SCRIPTINFO{ 0, {1220656956, 30744796}, {0, 0}, {1279978786, 30811548}, 0, 790 };
 	bool python_metadata_matches = true;
 	GetFileAttributesEx(L"mitm_script.py", GetFileExInfoStandard, &file_info);
 

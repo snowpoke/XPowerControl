@@ -13,6 +13,13 @@
 #endif
 
 
+/* Updates since 0.5.2:
+- Improved logging.
+- Fixed an issue where the program would falsely register the end of a match.
+- Fixed an issue where token retrieval wouldn't work for some users.
+- Added double checks in case the settings file is reported as corrupted.
+*/
+
 // CXPowerControlApp
 
 BEGIN_MESSAGE_MAP(CXPowerControlApp, CWinApp)

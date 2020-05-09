@@ -9,7 +9,7 @@ namespace http_requests {
 	static int writer(char* data, size_t size, size_t nmemb, std::string* writerData);
 
 	// sends http get request with iksm_token cookie
-	std::string load_page(const std::string& link_t, const std::string& SESSID_t);
+	std::string load_page(const std::string& link_t, const std::string& SESSID_t, bool log_json=true);
 
 	// read json parameter from version.json file on github
 	std::string get_global_info(const std::string& key_t);

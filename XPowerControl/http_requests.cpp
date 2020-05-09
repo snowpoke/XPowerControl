@@ -23,7 +23,7 @@ static int http_requests::writer(char* data, size_t size, size_t nmemb,
 	return static_cast<int>(size * nmemb);
 }
 
-string http_requests::load_page(const string& link_t, const string& SESSID_t) {
+string http_requests::load_page(const string& link_t, const string& SESSID_t, bool log_json /*= true*/) {
 	auto _deflogger = logging::get_logger(DEFAULT_LOG);
 	auto _jsonlogger = logging::get_logger(JSON_LOG);
 
@@ -64,8 +64,12 @@ string http_requests::load_page(const string& link_t, const string& SESSID_t) {
 	
 	_deflogger->info("Downloaded page from {} with iksm_session={} and returned response of {} characters.",
 		link_t, SESSID_t, ret.length());
-	_jsonlogger->info("Downloaded page from {} with iksm_session={} and returned response: {}",
+	if (log_json)
+		_jsonlogger->info("Downloaded page from {} with iksm_session={} and returned response: {}",
 		link_t, SESSID_t, ret);
+	else
+		_jsonlogger->info("Downloaded page from {} with iksm_session={} and returned response of {} characters.",
+			link_t, SESSID_t, ret.length());
 
 	return ret;
 }

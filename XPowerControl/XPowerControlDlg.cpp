@@ -267,21 +267,33 @@ BOOL CXPowerControlDlg::OnInitDialog()
 	}
 
 	// Try to parse settings.txt as JSON
-	try {
-		nlohmann::json j;
-		ifstream in_file("settings.txt");
-		in_file >> j;
-		in_file.close();
-	}
-	catch (exception e) {
-		ifstream in_file("settings.txt");
-		string settings_str{std::istreambuf_iterator<char>{in_file},{}}; // uniform-initialization to avoid being parsed as function declaration
-		_logger->error("Settings file was reported as corrupted.\ne.what() returned: {}\nsettings file content: {}", e.what(), settings_str);
-		in_file.close();
-		AfxMessageBox(_T("Your settings file is corrupted. A new file will be created, but there might be an error in your woomyDX installation."));
-		ofstream out_file("settings.txt");
-		out_file << "{}";
-		out_file.close();
+	int attempt_num = 1; // if the settings file seems to be corrupted, we give it three attempts to make sure we're not falsely deleting data
+	while (attempt_num <= 3) {
+		try {
+			attempt_num++;
+			nlohmann::json j;
+			ifstream in_file("settings.txt");
+			if (!in_file.good()) { // if we couldn't open the file, throw error
+				_logger->error("FATAL: Access to settings.txt file was denied.");
+				AfxMessageBox(L"Fatal error: Failed to open the settings file.");
+				AfxThrowUserException();
+			}
+			in_file >> j;
+			in_file.close();
+			break;
+		}
+		catch (exception e) {
+			if (attempt_num <= 3)
+				continue;
+			ifstream in_file("settings.txt");
+			string settings_str{ std::istreambuf_iterator<char>{in_file},{} }; // uniform-initialization to avoid being parsed as function declaration
+			_logger->error("Settings file was reported as corrupted.\ne.what() returned: {}\nsettings file content: {}", e.what(), settings_str);
+			in_file.close();
+			AfxMessageBox(_T("Your settings file is corrupted. A new file will be created, but there might be an error in your woomyDX installation."));
+			ofstream out_file("settings.txt");
+			out_file << "{}";
+			out_file.close();
+		}
 	}
 
 	// we try to read the settings version from the file and confirm that it is up to date

@@ -100,19 +100,21 @@ void load_powers(ModeInfo<float>& powers_t, const ModeInfo<float>& ranges_t, str
 	load_powers(powers_t[Mode::ZONES], powers_t[Mode::TOWER], powers_t[Mode::RAINMAKER], powers_t[Mode::CLAMS], ranges_t, SESSID_t);
 }
 
-void load_prev_match_info(int& start_time_t, float& power_after_t, string SESSID_t) {
+void load_prev_match_info(int& start_time_t, optional<float>& power_after_t, string SESSID_t) {
 	auto _logger = logging::get_logger(DEFAULT_LOG);
-	string info_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/results", SESSID_t);
+	auto _jsonlogger = logging::get_logger(JSON_LOG);
+
+	string info_json_string = http_requests::load_page("https://app.splatoon2.nintendo.net/api/results", SESSID_t, false);
 	try {
 		json j = json::parse(info_json_string);
-		string x_power_string;
-		string type;
-		j.at("results")[0].at("start_time").get_to(start_time_t);
-		j.at("results")[0].at("type").get_to(type);
+		// we write data included in j.at("results")[0] into the JSON log
+		_jsonlogger->info("j.at(\"results\")[0] contains: {}", j.at("results")[0].dump());
+		start_time_t = j.at("results")[0].at("start_time").get<int>();
+		string type = j.at("results")[0].at("type").get<string>();
 		if (type == "gachi" && !j.at("results")[0].at("x_power").is_null()) // check if the previous match was an x rank match
-			j.at("results")[0].at("x_power").get_to(power_after_t);
+			power_after_t = j.at("results")[0].at("x_power").get<float>();
 		else
-			power_after_t = 0;
+			power_after_t = {};
 	}
 	catch (exception& e) {
 		_logger->error("Failed to load the information about the previous match. e.what() responded: {}\nJSON result: {}",
@@ -125,7 +127,7 @@ void load_prev_match_info(int& start_time_t, float& power_after_t, string SESSID
 
 
 void load_prev_match_info(int& start_time_t, string SESSID_t) {
-	float temp;
+	optional<float> temp;
 	load_prev_match_info(start_time_t, temp, SESSID_t);
 }
 
@@ -449,17 +451,17 @@ UINT monitor_main_alt(LPVOID pParam) {
 
 			// load starting time and resulting power of the last match saved in splatapp
 			int new_start_time;
-			float new_power;
+			optional<float> new_power;
 			load_prev_match_info(new_start_time, new_power, SESSID);
 
-			if (prev_start_time != new_start_time) { // if a new starting time was found, this means the match has ended
+			if (prev_start_time != new_start_time && new_power) { // if a new starting time was found, this means the match has ended
 				window->match_running = false;
 				run_script_matchend();
 				_logger->info("End of match has been detected.");
-				_logger->info("Detected new power: {}", new_power);
-				_logger->info("Previous power(): {}", mode_to_string(curr_mode), powers[curr_mode]);
-				float power_change = new_power - powers[curr_mode];
-				powers[curr_mode] = new_power;
+				_logger->info("Detected new power: {}", *new_power);
+				_logger->info("Previous power({}): {}", mode_to_string(curr_mode), powers[curr_mode]);
+				float power_change = *new_power - powers[curr_mode];
+				powers[curr_mode] = *new_power;
 
 				// initialize analytics thread
 				//optional<float> win_change = (power_change > 0) ? optional<float>(power_change) : optional<float>();
@@ -469,7 +471,7 @@ UINT monitor_main_alt(LPVOID pParam) {
 
 				if (power_change > 0) { // if we won the match, we can use this information to adjust the range
 					auto old_range = ranges[curr_mode];
-					ranges[curr_mode] = round2(new_power - powers_after_loss[curr_mode]);
+					ranges[curr_mode] = round2(*new_power - powers_after_loss[curr_mode]);
 					_logger->info("Adjusted range in {} from {} to {}.", mode_to_string(curr_mode), old_range, ranges[curr_mode]);
 					save_ranges(ranges);
 				}
