@@ -23281,3 +23281,7 @@ iksm_session=f0f338ea73ba598a7b7feb5b6b32d89ff990eea9; _ga=GA1.2.450955315.15889
 [2020-05-09 16:20:41.603] [default_log] [info] Downloaded page from https://app.splatoon2.nintendo.net/api/results with iksm_session=f0f338ea73ba598a7b7feb5b6b32d89ff990eea9 and returned response of 216860 characters.
 [2020-05-09 16:20:42.239] [default_log] [info] Downloaded page from https://app.splatoon2.nintendo.net/api/x_power_ranking/200501T00_200601T00/summary with iksm_session=f0f338ea73ba598a7b7feb5b6b32d89ff990eea9 and returned response of 9665 characters.
 [2020-05-09 16:20:43.543] [default_log] [info] Downloaded page from https://app.splatoon2.nintendo.net/api/x_power_ranking/200501T00_200601T00/summary with iksm_session=f0f338ea73ba598a7b7feb5b6b32d89ff990eea9 and returned response of 9665 characters.
+[2020-05-18 06:37:44.552] [default_log] [warning] test warning
+[2020-05-18 06:37:44.940] [default_log] [info] Downloaded page from https://raw.githubusercontent.com/snowpoke/XPowerControl-public/master/version.json with iksm_session= and returned response of 154 characters.
+[2020-05-18 06:37:44.976] [default_log] [info] Sending signal to start monitoring.
+[2020-05-18 06:37:45.711] [default_log] [info] Downloaded page from https://app.splatoon2.nintendo.net/api/schedules with iksm_session=f0f338ea73ba598a7b7feb5b6b32d89ff990eea9 and returned response of 74 characters.

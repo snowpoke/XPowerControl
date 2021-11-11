@@ -20,6 +20,11 @@
 - Added double checks in case the settings file is reported as corrupted.
 */
 
+/* Updates since 0.5.3:
+- Fixed an issue where the program would sometimes update values multiple times.
+- This also fixes an issue where the program would sometimes show incorrect values after the rotation changes.
+*/
+
 // CXPowerControlApp
 
 BEGIN_MESSAGE_MAP(CXPowerControlApp, CWinApp)

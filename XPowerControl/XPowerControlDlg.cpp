@@ -87,6 +87,7 @@ bool CXPowerControlDlg::start_monitoring() {
 			NewTokenDlg dlg(INFO_EXPIRED);
 			dlg.DoModal();
 			start_monitoring();
+			return TRUE;
 		}
 
 		thread_rotation_monitor = AfxBeginThread(monitor_rotation, this);
